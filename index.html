@@ -81,13 +81,17 @@
     <iframe id="twitch-chat-frame"></iframe>
   </main>
 
+  <!-- API do YouTube -->
+  <script src="https://www.youtube.com/iframe_api"></script>
+
   <script>
-    const parentDomain = window.location.hostname || 'localhost'; // pega domínio real
+    let player;
 
     function getYouTubeEmbedUrl(url) {
       const match = url.match(/(?:youtu\.be\/|v=)([^&]+)/);
       if (match && match[1]) {
-        return `https://www.youtube.com/embed/${match[1]}?autoplay=1`;
+        // Ativa controle JS e autoplay
+        return `https://www.youtube.com/embed/${match[1]}?autoplay=1&enablejsapi=1`;
       }
       return "";
     }
@@ -102,11 +106,29 @@
       }
 
       if (twitchChannel) {
-        // Usa o hostname do seu domínio, obrigatório pela Twitch
         const twitchEmbed = `https://www.twitch.tv/embed/${twitchChannel}/chat?parent=igorfioli.github.io&darkpopout`;
         document.getElementById("twitch-chat-frame").src = twitchEmbed;
+      }
+    }
+
+    function onYouTubeIframeAPIReady() {
+      player = new YT.Player('youtube-frame', {
+        events: {
+          onReady: onPlayerReady
+        }
+      });
+    }
+
+    function onPlayerReady(event) {
+      try {
+        // Tenta pular pro ponto mais ao vivo possível
+        const duration = player.getDuration();
+        player.seekTo(duration, true);
+      } catch (e) {
+        console.warn('Erro ao buscar ponto ao vivo:', e);
       }
     }
   </script>
 </body>
 </html>
+
