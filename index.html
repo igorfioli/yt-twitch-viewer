@@ -1,0 +1,112 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>YouTube com chat da Twitch</title>
+  <style>
+    body {
+      margin: 0;
+      font-family: Arial, sans-serif;
+      background-color: #181818;
+      color: #fff;
+    }
+
+    header {
+      background-color: #202020;
+      padding: 10px;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      gap: 10px;
+    }
+
+    input {
+      padding: 8px;
+      border: none;
+      border-radius: 4px;
+      width: 40%;
+    }
+
+    button {
+      padding: 8px 16px;
+      background-color: #cc0000;
+      border: none;
+      border-radius: 4px;
+      color: white;
+      cursor: pointer;
+    }
+
+    main {
+      display: flex;
+      height: calc(100vh - 60px);
+    }
+
+    iframe {
+      border: none;
+      height: 100%;
+    }
+
+    #youtube-frame {
+      flex: 2;
+      width: 100%;
+    }
+
+    #twitch-chat-frame {
+      flex: 1;
+      width: 100%;
+    }
+
+    @media (max-width: 768px) {
+      main {
+        flex-direction: column;
+      }
+
+      #youtube-frame,
+      #twitch-chat-frame {
+        height: 50%;
+      }
+    }
+  </style>
+</head>
+<body>
+  <header>
+    <input id="yt-url" type="text" placeholder="Cole o link do YouTube (ex: https://www.youtube.com/watch?v=ID)" />
+    <input id="twitch-channel" type="text" placeholder="Nome do canal da Twitch (ex: Gaules)" />
+    <button onclick="carregar()">Carregar</button>
+  </header>
+
+  <main>
+    <iframe id="youtube-frame" allowfullscreen></iframe>
+    <iframe id="twitch-chat-frame"></iframe>
+  </main>
+
+  <script>
+    const parentDomain = window.location.hostname || 'localhost'; // pega domínio real
+
+    function getYouTubeEmbedUrl(url) {
+      const match = url.match(/(?:youtu\.be\/|v=)([^&]+)/);
+      if (match && match[1]) {
+        return `https://www.youtube.com/embed/${match[1]}?autoplay=1`;
+      }
+      return "";
+    }
+
+    function carregar() {
+      const ytUrl = document.getElementById("yt-url").value.trim();
+      const twitchChannel = document.getElementById("twitch-channel").value.trim().toLowerCase();
+
+      const ytEmbed = getYouTubeEmbedUrl(ytUrl);
+      if (ytEmbed) {
+        document.getElementById("youtube-frame").src = ytEmbed;
+      }
+
+      if (twitchChannel) {
+        // Usa o hostname do seu domínio, obrigatório pela Twitch
+        const twitchEmbed = `https://www.twitch.tv/embed/${twitchChannel}/chat?parent=${parentDomain}`;
+        document.getElementById("twitch-chat-frame").src = twitchEmbed;
+      }
+    }
+  </script>
+</body>
+</html>
