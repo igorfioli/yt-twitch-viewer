@@ -121,9 +121,14 @@
 
     function onPlayerReady(event) {
       try {
-        // Tenta pular pro ponto mais ao vivo possível
         const duration = player.getDuration();
         player.seekTo(duration, true);
+
+        // ⚡ acelera pra 2x por 8 segundos, depois volta pra 1x
+        player.setPlaybackRate(2);
+        setTimeout(() => {
+          player.setPlaybackRate(1);
+        }, 8000);
       } catch (e) {
         console.warn('Erro ao buscar ponto ao vivo:', e);
       }
@@ -131,4 +136,3 @@
   </script>
 </body>
 </html>
-
