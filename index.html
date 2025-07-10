@@ -42,19 +42,18 @@
       height: calc(100vh - 60px);
     }
 
-    iframe {
+    #youtube-player, #twitch-chat-frame {
       border: none;
       height: 100%;
+      width: 100%;
     }
 
-    #youtube-frame {
+    #youtube-container {
       flex: 2;
-      width: 100%;
     }
 
     #twitch-chat-frame {
       flex: 1;
-      width: 100%;
     }
 
     @media (max-width: 768px) {
@@ -62,7 +61,7 @@
         flex-direction: column;
       }
 
-      #youtube-frame,
+      #youtube-container,
       #twitch-chat-frame {
         height: 50%;
       }
@@ -77,46 +76,46 @@
   </header>
 
   <main>
-    <iframe id="youtube-frame" allowfullscreen></iframe>
+    <div id="youtube-container"></div>
     <iframe id="twitch-chat-frame"></iframe>
   </main>
 
-  <!-- API do YouTube -->
   <script src="https://www.youtube.com/iframe_api"></script>
 
   <script>
     let player;
 
-    function getYouTubeEmbedUrl(url) {
+    function getYouTubeVideoId(url) {
       const match = url.match(/(?:youtu\.be\/|v=)([^&]+)/);
-      if (match && match[1]) {
-        // Ativa controle JS e autoplay
-        return `https://www.youtube.com/embed/${match[1]}?autoplay=1&enablejsapi=1`;
-      }
-      return "";
+      return match && match[1] ? match[1] : null;
     }
 
     function carregar() {
       const ytUrl = document.getElementById("yt-url").value.trim();
       const twitchChannel = document.getElementById("twitch-channel").value.trim().toLowerCase();
 
-      const ytEmbed = getYouTubeEmbedUrl(ytUrl);
-      if (ytEmbed) {
-        document.getElementById("youtube-frame").src = ytEmbed;
+      const videoId = getYouTubeVideoId(ytUrl);
+      if (videoId) {
+        // Remove qualquer player anterior
+        document.getElementById("youtube-container").innerHTML = "";
+
+        // Cria novo player
+        player = new YT.Player("youtube-container", {
+          videoId: videoId,
+          playerVars: {
+            autoplay: 1,
+            enablejsapi: 1
+          },
+          events: {
+            onReady: onPlayerReady
+          }
+        });
       }
 
       if (twitchChannel) {
         const twitchEmbed = `https://www.twitch.tv/embed/${twitchChannel}/chat?parent=igorfioli.github.io&darkpopout`;
         document.getElementById("twitch-chat-frame").src = twitchEmbed;
       }
-    }
-
-    function onYouTubeIframeAPIReady() {
-      player = new YT.Player('youtube-frame', {
-        events: {
-          onReady: onPlayerReady
-        }
-      });
     }
 
     function onPlayerReady(event) {
@@ -126,11 +125,9 @@
 
         // ⚡ acelera pra 2x por 8 segundos, depois volta pra 1x
         player.setPlaybackRate(2);
-        setTimeout(() => {
-          player.setPlaybackRate(1);
-        }, 8000);
+        setTimeout(() => player.setPlaybackRate(1), 8000);
       } catch (e) {
-        console.warn('Erro ao buscar ponto ao vivo:', e);
+        console.warn("Erro ao buscar ponto ao vivo:", e);
       }
     }
   </script>
