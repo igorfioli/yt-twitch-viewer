@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <title>Kick + Chat da Twitch</title>
+  <title>Kick + Chat da Twitch (Imersivo)</title>
   <style>
     :root {
       --bg: #181818;
@@ -11,23 +11,38 @@
       --text: #fff;
       --accent: #cc0000;
       --muted: #aaaaaa;
+      --header-h: 68px; /* altura da barra quando visível */
     }
     * { box-sizing: border-box; }
+    html, body { height: 100%; }
     body {
       margin: 0;
       font-family: Arial, sans-serif;
       background-color: var(--bg);
       color: var(--text);
     }
+
     header {
       background-color: var(--panel);
+      height: var(--header-h);
+      transition: height .25s ease, padding .25s ease, opacity .2s ease;
       padding: 10px;
       display: flex;
-      justify-content: space-between;
-      align-items: center;
       gap: 10px;
-      flex-wrap: wrap;
+      align-items: center;
+      justify-content: space-between;
+      overflow: hidden;
+      opacity: 1;
+      border-bottom: 1px solid #2d2d2d;
     }
+    header.hidden {
+      height: 0;
+      padding-top: 0;
+      padding-bottom: 0;
+      opacity: 0;
+      border-bottom: 0;
+    }
+
     .inputs {
       display: flex;
       gap: 8px;
@@ -52,10 +67,26 @@
       cursor: pointer;
       font-weight: bold;
     }
-    main {
-      display: flex;
-      height: calc(100vh - 64px);
+    .ghost-btn {
+      background: #2a2a2a;
+      color: #fff;
+      border: 1px solid #3a3a3a;
     }
+    .hint {
+      color: var(--muted);
+      font-size: 12px;
+      margin-left: 6px;
+    }
+
+    main {
+      height: calc(100vh - var(--header-h));
+      transition: height .25s ease;
+      display: flex;
+    }
+    main.full {
+      height: 100vh; /* quando a barra some, ocupa 100% */
+    }
+
     iframe {
       border: none;
       height: 100%;
@@ -71,28 +102,45 @@
       width: 100%;
       background: #0f0f0f;
     }
+
     @media (max-width: 900px) {
       main { flex-direction: column; }
       #kick-frame, #twitch-chat-frame { height: 50%; }
     }
-    .hint {
-      color: var(--muted);
-      font-size: 12px;
-      margin-left: 6px;
+
+    /* Botão flutuante para voltar a barra quando estiver oculta */
+    .float-toggle {
+      position: fixed;
+      top: 10px;
+      right: 10px;
+      z-index: 10;
+      padding: 8px 10px;
+      border-radius: 8px;
+      background: rgba(32,32,32,.85);
+      border: 1px solid #3a3a3a;
+      color: #fff;
+      cursor: pointer;
+      display: none; /* só aparece no modo imersivo */
+    }
+    .float-toggle.show {
+      display: inline-block;
     }
   </style>
 </head>
 <body>
-  <header>
+  <header id="topbar">
     <div class="inputs">
-      <input id="kick-input" type="text" placeholder="Cole o link da Kick ou nome do canal (ex: https://kick.com/gaules ou gaules)" />
-      <input id="twitch-input" type="text" placeholder="Cole o link da Twitch ou nome do canal (ex: https://twitch.tv/gaules ou gaules)" />
+      <input id="kick-input" type="text" placeholder="Kick: link ou canal (ex: https://kick.com/gaules ou gaules)" />
+      <input id="twitch-input" type="text" placeholder="Twitch: link ou canal (ex: https://twitch.tv/gaules ou gaules)" />
       <button id="btn-carregar">Carregar</button>
-      <span class="hint">Dica: no GitHub Pages o <code>parent</code> já está configurado.</span>
+      <span class="hint">“Modo imersivo” esconde a barra. Atalho: <b>H</b>.</span>
+    </div>
+    <div class="inputs">
+      <button id="btn-immersive" class="ghost-btn" title="Ocultar/mostrar barra">Modo imersivo</button>
     </div>
   </header>
 
-  <main>
+  <main id="stage">
     <!-- Vídeo principal (Kick) -->
     <iframe
       id="kick-frame"
@@ -108,17 +156,26 @@
     </iframe>
   </main>
 
+  <!-- Botão para voltar a barra quando estiver oculta -->
+  <button id="floatToggle" class="float-toggle" title="Mostrar/ocultar barra (H)">Mostrar barra</button>
+
   <script>
     // Domínio do seu Pages para o parâmetro 'parent' do chat da Twitch
     const TWITCH_PARENT = 'igorfioli.github.io';
+
+    const $kick = document.getElementById('kick-input');
+    const $twitch = document.getElementById('twitch-input');
+    const $btnCarregar = document.getElementById('btn-carregar');
+    const $btnImmersive = document.getElementById('btn-immersive');
+    const $topbar = document.getElementById('topbar');
+    const $stage = document.getElementById('stage');
+    const $floatToggle = document.getElementById('floatToggle');
 
     // Extrai canal da Kick de link ou texto
     function parseKickChannel(input) {
       if (!input) return null;
       input = input.trim();
-      // se for só o nome
       if (!input.includes('/')) return input.toLowerCase();
-      // se for URL
       const m = input.match(/kick\.com\/([^\/\?\#]+)/i);
       return m ? m[1].toLowerCase() : null;
     }
@@ -132,45 +189,82 @@
       return m ? m[1].toLowerCase() : null;
     }
 
-    function carregar() {
-      const kickRaw = document.getElementById('kick-input').value;
-      const twitchRaw = document.getElementById('twitch-input').value;
+    function setKick(kickChan) {
+      if (!kickChan) return;
+      const kickUrl = `https://player.kick.com/${encodeURIComponent(kickChan)}?autoplay=true&muted=false`;
+      document.getElementById('kick-frame').src = kickUrl;
+    }
 
-      const kickChan = parseKickChannel(kickRaw);
-      const twitchChan = parseTwitchChannel(twitchRaw);
-
-      // Carrega vídeo da Kick
-      if (kickChan) {
-        // player.kick.com aceita /{channel}?autoplay=true
-        const kickUrl = `https://player.kick.com/${encodeURIComponent(kickChan)}?autoplay=true&muted=false`;
-        document.getElementById('kick-frame').src = kickUrl;
-      } else {
-        alert('Informe um link ou canal válido da Kick. Ex: https://kick.com/gaules ou apenas "gaules".');
+    function setTwitchChat(twitchChan) {
+      const chat = document.getElementById('twitch-chat-frame');
+      if (!twitchChan) {
+        chat.removeAttribute('src');
+        return;
       }
+      const chatUrl = `https://www.twitch.tv/embed/${encodeURIComponent(twitchChan)}/chat?parent=${TWITCH_PARENT}&darkpopout`;
+      chat.src = chatUrl;
+    }
 
-      // Carrega chat da Twitch escuro
-      if (twitchChan) {
-        const chatUrl = `https://www.twitch.tv/embed/${encodeURIComponent(twitchChan)}/chat?parent=${TWITCH_PARENT}&darkpopout`;
-        document.getElementById('twitch-chat-frame').src = chatUrl;
+    function carregar() {
+      const kickChan = parseKickChannel($kick.value);
+      const twitchChan = parseTwitchChannel($twitch.value);
+      if (!kickChan) {
+        alert('Informe um link ou canal válido da Kick. Ex: https://kick.com/gaules ou apenas "gaules".');
+        return;
+      }
+      setKick(kickChan);
+      setTwitchChat(twitchChan);
+
+      // Dica: já entra no modo imersivo automático se já tem ambos preenchidos
+      // toggleImersivo(true);
+    }
+
+    function toggleImersivo(forceOn) {
+      const willHide = (typeof forceOn === 'boolean') ? forceOn : !$topbar.classList.contains('hidden');
+      if (willHide) {
+        $topbar.classList.add('hidden');
+        $stage.classList.add('full');
+        $floatToggle.classList.add('show');
       } else {
-        // Limpa o chat se não preencher Twitch (opcional)
-        document.getElementById('twitch-chat-frame').removeAttribute('src');
+        $topbar.classList.remove('hidden');
+        $stage.classList.remove('full');
+        $floatToggle.classList.remove('show');
       }
     }
 
-    // Botão
-    document.getElementById('btn-carregar').addEventListener('click', carregar);
+    // Eventos
+    $btnCarregar.addEventListener('click', carregar);
+    $btnImmersive.addEventListener('click', () => toggleImersivo());
+    $floatToggle.addEventListener('click', () => toggleImersivo());
 
     // Enter em qualquer campo dispara carregar
     function handleEnter(e) {
       if (e.key === 'Enter') carregar();
     }
-    document.getElementById('kick-input').addEventListener('keydown', handleEnter);
-    document.getElementById('twitch-input').addEventListener('keydown', handleEnter);
+    $kick.addEventListener('keydown', handleEnter);
+    $twitch.addEventListener('keydown', handleEnter);
 
-    // Opcional: URL de exemplo ao abrir (comente se não quiser)
-    // document.getElementById('kick-input').value = 'https://kick.com/gaules';
-    // document.getElementById('twitch-input').value = 'gaules';
+    // Atalho de teclado: H para alternar imersivo
+    document.addEventListener('keydown', (e) => {
+      if (e.key.toLowerCase() === 'h') toggleImersivo();
+    });
+
+    // Suporte a parâmetros na URL: ?kick=gaules&twitch=gaules&immersive=1
+    (function bootFromQuery() {
+      const params = new URLSearchParams(location.search);
+      const kickParam = params.get('kick');
+      const twitchParam = params.get('twitch');
+      const immersive = params.get('immersive');
+
+      if (kickParam) $kick.value = kickParam;
+      if (twitchParam) $twitch.value = twitchParam;
+
+      if (kickParam || twitchParam) carregar();
+      if (immersive === '1' || immersive === 'true') toggleImersivo(true);
+    })();
+
+    // Duplo clique em qualquer área do vídeo alterna imersivo (opcional)
+    document.getElementById('kick-frame').addEventListener('dblclick', () => toggleImersivo());
   </script>
 </body>
 </html>
