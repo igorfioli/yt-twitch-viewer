@@ -3,136 +3,174 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <title>YouTube com chat da Twitch</title>
+  <title>Kick + Chat da Twitch</title>
   <style>
+    :root {
+      --bg: #181818;
+      --panel: #202020;
+      --text: #fff;
+      --accent: #cc0000;
+      --muted: #aaaaaa;
+    }
+    * { box-sizing: border-box; }
     body {
       margin: 0;
       font-family: Arial, sans-serif;
-      background-color: #181818;
-      color: #fff;
+      background-color: var(--bg);
+      color: var(--text);
     }
-
     header {
-      background-color: #202020;
+      background-color: var(--panel);
       padding: 10px;
       display: flex;
       justify-content: space-between;
       align-items: center;
       gap: 10px;
+      flex-wrap: wrap;
     }
-
+    .inputs {
+      display: flex;
+      gap: 8px;
+      flex-wrap: wrap;
+      align-items: center;
+    }
     input {
-      padding: 8px;
+      padding: 10px 12px;
       border: none;
-      border-radius: 4px;
-      width: 40%;
+      border-radius: 6px;
+      min-width: 260px;
+      background: #2a2a2a;
+      color: var(--text);
+      outline: none;
     }
-
     button {
-      padding: 8px 16px;
-      background-color: #cc0000;
+      padding: 10px 14px;
+      background-color: var(--accent);
       border: none;
-      border-radius: 4px;
+      border-radius: 6px;
       color: white;
       cursor: pointer;
+      font-weight: bold;
     }
-
     main {
       display: flex;
-      height: calc(100vh - 60px);
+      height: calc(100vh - 64px);
     }
-
     iframe {
       border: none;
       height: 100%;
-    }
-
-    #youtube-frame {
-      flex: 2;
       width: 100%;
     }
-
+    #kick-frame {
+      flex: 2;
+      width: 100%;
+      background: #000;
+    }
     #twitch-chat-frame {
       flex: 1;
       width: 100%;
+      background: #0f0f0f;
     }
-
-    @media (max-width: 768px) {
-      main {
-        flex-direction: column;
-      }
-
-      #youtube-frame,
-      #twitch-chat-frame {
-        height: 50%;
-      }
+    @media (max-width: 900px) {
+      main { flex-direction: column; }
+      #kick-frame, #twitch-chat-frame { height: 50%; }
+    }
+    .hint {
+      color: var(--muted);
+      font-size: 12px;
+      margin-left: 6px;
     }
   </style>
 </head>
 <body>
   <header>
-    <input id="yt-url" type="text" placeholder="Cole o link do YouTube (ex: https://www.youtube.com/watch?v=ID)" />
-    <input id="twitch-channel" type="text" placeholder="Nome do canal da Twitch (ex: Gaules)" />
-    <button onclick="carregar()">Carregar</button>
+    <div class="inputs">
+      <input id="kick-input" type="text" placeholder="Cole o link da Kick ou nome do canal (ex: https://kick.com/gaules ou gaules)" />
+      <input id="twitch-input" type="text" placeholder="Cole o link da Twitch ou nome do canal (ex: https://twitch.tv/gaules ou gaules)" />
+      <button id="btn-carregar">Carregar</button>
+      <span class="hint">Dica: no GitHub Pages o <code>parent</code> já está configurado.</span>
+    </div>
   </header>
 
   <main>
-    <iframe id="youtube-frame" allowfullscreen></iframe>
-    <iframe id="twitch-chat-frame"></iframe>
+    <!-- Vídeo principal (Kick) -->
+    <iframe
+      id="kick-frame"
+      allow="autoplay; fullscreen; picture-in-picture"
+      allowfullscreen
+      referrerpolicy="no-referrer-when-downgrade">
+    </iframe>
+
+    <!-- Chat da Twitch (modo escuro) -->
+    <iframe
+      id="twitch-chat-frame"
+      referrerpolicy="no-referrer-when-downgrade">
+    </iframe>
   </main>
 
-  <!-- API do YouTube -->
-  <script src="https://www.youtube.com/iframe_api"></script>
-
   <script>
-    let player;
+    // Domínio do seu Pages para o parâmetro 'parent' do chat da Twitch
+    const TWITCH_PARENT = 'igorfioli.github.io';
 
-    function getYouTubeEmbedUrl(url) {
-      const match = url.match(/(?:youtu\.be\/|v=)([^&]+)/);
-      if (match && match[1]) {
-        // Ativa controle JS e autoplay
-        return `https://www.youtube.com/embed/${match[1]}?autoplay=1&enablejsapi=1`;
-      }
-      return "";
+    // Extrai canal da Kick de link ou texto
+    function parseKickChannel(input) {
+      if (!input) return null;
+      input = input.trim();
+      // se for só o nome
+      if (!input.includes('/')) return input.toLowerCase();
+      // se for URL
+      const m = input.match(/kick\.com\/([^\/\?\#]+)/i);
+      return m ? m[1].toLowerCase() : null;
+    }
+
+    // Extrai canal da Twitch de link ou texto
+    function parseTwitchChannel(input) {
+      if (!input) return null;
+      input = input.trim();
+      if (!input.includes('/')) return input.toLowerCase();
+      const m = input.match(/twitch\.tv\/([^\/\?\#]+)/i);
+      return m ? m[1].toLowerCase() : null;
     }
 
     function carregar() {
-      const ytUrl = document.getElementById("yt-url").value.trim();
-      const twitchChannel = document.getElementById("twitch-channel").value.trim().toLowerCase();
+      const kickRaw = document.getElementById('kick-input').value;
+      const twitchRaw = document.getElementById('twitch-input').value;
 
-      const ytEmbed = getYouTubeEmbedUrl(ytUrl);
-      if (ytEmbed) {
-        document.getElementById("youtube-frame").src = ytEmbed;
+      const kickChan = parseKickChannel(kickRaw);
+      const twitchChan = parseTwitchChannel(twitchRaw);
+
+      // Carrega vídeo da Kick
+      if (kickChan) {
+        // player.kick.com aceita /{channel}?autoplay=true
+        const kickUrl = `https://player.kick.com/${encodeURIComponent(kickChan)}?autoplay=true&muted=false`;
+        document.getElementById('kick-frame').src = kickUrl;
+      } else {
+        alert('Informe um link ou canal válido da Kick. Ex: https://kick.com/gaules ou apenas "gaules".');
       }
 
-      if (twitchChannel) {
-        const twitchEmbed = `https://www.twitch.tv/embed/${twitchChannel}/chat?parent=igorfioli.github.io&darkpopout`;
-        document.getElementById("twitch-chat-frame").src = twitchEmbed;
+      // Carrega chat da Twitch escuro
+      if (twitchChan) {
+        const chatUrl = `https://www.twitch.tv/embed/${encodeURIComponent(twitchChan)}/chat?parent=${TWITCH_PARENT}&darkpopout`;
+        document.getElementById('twitch-chat-frame').src = chatUrl;
+      } else {
+        // Limpa o chat se não preencher Twitch (opcional)
+        document.getElementById('twitch-chat-frame').removeAttribute('src');
       }
     }
 
-    function onYouTubeIframeAPIReady() {
-      player = new YT.Player('youtube-frame', {
-        events: {
-          onReady: onPlayerReady
-        }
-      });
-    }
+    // Botão
+    document.getElementById('btn-carregar').addEventListener('click', carregar);
 
-    function onPlayerReady(event) {
-      try {
-        const duration = player.getDuration();
-        player.seekTo(duration, true);
-
-        // ⚡ acelera pra 2x por 8 segundos, depois volta pra 1x
-        player.setPlaybackRate(2);
-        setTimeout(() => {
-          player.setPlaybackRate(1);
-        }, 8000);
-      } catch (e) {
-        console.warn('Erro ao buscar ponto ao vivo:', e);
-      }
+    // Enter em qualquer campo dispara carregar
+    function handleEnter(e) {
+      if (e.key === 'Enter') carregar();
     }
+    document.getElementById('kick-input').addEventListener('keydown', handleEnter);
+    document.getElementById('twitch-input').addEventListener('keydown', handleEnter);
+
+    // Opcional: URL de exemplo ao abrir (comente se não quiser)
+    // document.getElementById('kick-input').value = 'https://kick.com/gaules';
+    // document.getElementById('twitch-input').value = 'gaules';
   </script>
 </body>
 </html>
