@@ -1,138 +1,124 @@
 <!DOCTYPE html>
 <html lang="pt-BR">
 <head>
-  <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <title>YouTube com chat da Twitch</title>
-  <style>
-    body {
-      margin: 0;
-      font-family: Arial, sans-serif;
-      background-color: #181818;
-      color: #fff;
-    }
+<meta charset="UTF-8">
+<title>Kick Source Viewer</title>
 
-    header {
-      background-color: #202020;
-      padding: 10px;
-      display: flex;
-      justify-content: space-between;
-      align-items: center;
-      gap: 10px;
-    }
+<script src="https://cdn.jsdelivr.net/npm/hls.js@latest"></script>
 
-    input {
-      padding: 8px;
-      border: none;
-      border-radius: 4px;
-      width: 40%;
-    }
+<style>
 
-    button {
-      padding: 8px 16px;
-      background-color: #cc0000;
-      border: none;
-      border-radius: 4px;
-      color: white;
-      cursor: pointer;
-    }
+body{
+margin:0;
+background:#000;
+display:flex;
+height:100vh;
+overflow:hidden;
+font-family:sans-serif;
+}
 
-    main {
-      display: flex;
-      height: calc(100vh - 60px);
-    }
+#videoArea{
+flex:3;
+display:flex;
+justify-content:center;
+align-items:center;
+background:black;
+}
 
-    iframe {
-      border: none;
-      height: 100%;
-    }
+video{
+width:100%;
+height:100%;
+object-fit:contain;
+background:black;
+}
 
-    #youtube-frame {
-      flex: 2;
-      width: 100%;
-    }
+#chat{
+flex:1;
+border:0;
+}
 
-    #twitch-chat-frame {
-      flex: 1;
-      width: 100%;
-    }
+#top{
+position:fixed;
+top:0;
+left:0;
+right:0;
+background:#111;
+padding:6px;
+display:flex;
+gap:8px;
+z-index:10;
+}
 
-    @media (max-width: 768px) {
-      main {
-        flex-direction: column;
-      }
+input{
+padding:6px;
+border:none;
+border-radius:4px;
+}
 
-      #youtube-frame,
-      #twitch-chat-frame {
-        height: 50%;
-      }
-    }
-  </style>
+button{
+padding:6px 10px;
+background:#6441a5;
+border:none;
+color:white;
+border-radius:4px;
+cursor:pointer;
+}
+
+</style>
 </head>
+
 <body>
-  <header>
-    <input id="yt-url" type="text" placeholder="Cole o link do YouTube (ex: https://www.youtube.com/watch?v=ID)" />
-    <input id="twitch-channel" type="text" placeholder="Nome do canal da Twitch (ex: Gaules)" />
-    <button onclick="carregar()">Carregar</button>
-  </header>
 
-  <main>
-    <iframe id="youtube-frame" allowfullscreen></iframe>
-    <iframe id="twitch-chat-frame"></iframe>
-  </main>
+<div id="top">
 
-  <!-- API do YouTube -->
-  <script src="https://www.youtube.com/iframe_api"></script>
+<input id="kick" placeholder="Canal Kick">
+<input id="twitch" placeholder="Chat Twitch">
 
-  <script>
-    let player;
+<button onclick="abrir()">Abrir</button>
 
-    function getYouTubeEmbedUrl(url) {
-      const match = url.match(/(?:youtu\.be\/|v=)([^&]+)/);
-      if (match && match[1]) {
-        // Ativa controle JS e autoplay
-        return `https://www.youtube.com/embed/${match[1]}?autoplay=1&enablejsapi=1`;
-      }
-      return "";
-    }
+</div>
 
-    function carregar() {
-      const ytUrl = document.getElementById("yt-url").value.trim();
-      const twitchChannel = document.getElementById("twitch-channel").value.trim().toLowerCase();
+<div id="videoArea">
+<video id="video" controls autoplay></video>
+</div>
 
-      const ytEmbed = getYouTubeEmbedUrl(ytUrl);
-      if (ytEmbed) {
-        document.getElementById("youtube-frame").src = ytEmbed;
-      }
+<iframe id="chat"></iframe>
 
-      if (twitchChannel) {
-        const twitchEmbed = `https://www.twitch.tv/embed/${twitchChannel}/chat?parent=igorfioli.github.io&darkpopout`;
-        document.getElementById("twitch-chat-frame").src = twitchEmbed;
-      }
-    }
+<script>
 
-    function onYouTubeIframeAPIReady() {
-      player = new YT.Player('youtube-frame', {
-        events: {
-          onReady: onPlayerReady
-        }
-      });
-    }
+async function abrir(){
 
-    function onPlayerReady(event) {
-      try {
-        const duration = player.getDuration();
-        player.seekTo(duration, true);
+const canal = document.getElementById("kick").value
+const twitch = document.getElementById("twitch").value
 
-        // ⚡ acelera pra 2x por 8 segundos, depois volta pra 1x
-        player.setPlaybackRate(2);
-        setTimeout(() => {
-          player.setPlaybackRate(1);
-        }, 8000);
-      } catch (e) {
-        console.warn('Erro ao buscar ponto ao vivo:', e);
-      }
-    }
-  </script>
+/* pegar info da live */
+
+const res = await fetch(`https://kick.com/api/v2/channels/${canal}`)
+const data = await res.json()
+
+const hls = data.playback_url
+
+const video = document.getElementById("video")
+
+if(Hls.isSupported()){
+
+const hlsPlayer = new Hls()
+
+hlsPlayer.loadSource(hls)
+hlsPlayer.attachMedia(video)
+
+}
+
+video.src = hls
+
+/* chat twitch */
+
+document.getElementById("chat").src =
+`https://www.twitch.tv/embed/${twitch}/chat?parent=localhost&darkpopout`
+
+}
+
+</script>
+
 </body>
 </html>
