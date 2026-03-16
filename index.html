@@ -1,8 +1,9 @@
+```html
 <!DOCTYPE html>
 <html lang="pt-BR">
 <head>
 <meta charset="UTF-8">
-<title>Kick Source Viewer</title>
+<title>Stream Viewer</title>
 
 <script src="https://cdn.jsdelivr.net/npm/hls.js@latest"></script>
 
@@ -16,6 +17,8 @@ height:100vh;
 overflow:hidden;
 font-family:sans-serif;
 }
+
+/* área do vídeo */
 
 #videoArea{
 flex:3;
@@ -32,10 +35,14 @@ object-fit:contain;
 background:black;
 }
 
+/* chat */
+
 #chat{
 flex:1;
 border:0;
 }
+
+/* barra superior */
 
 #top{
 position:fixed;
@@ -43,10 +50,18 @@ top:0;
 left:0;
 right:0;
 background:#111;
-padding:6px;
+padding:8px;
 display:flex;
 gap:8px;
 z-index:10;
+
+opacity:1;
+transition:opacity .4s;
+}
+
+#top.hidden{
+opacity:0;
+pointer-events:none;
 }
 
 input{
@@ -71,8 +86,8 @@ cursor:pointer;
 
 <div id="top">
 
-<input id="kick" placeholder="Canal Kick">
-<input id="twitch" placeholder="Chat Twitch">
+<input id="kick" value="rnakano">
+<input id="twitch" value="rnakano">
 
 <button onclick="abrir()">Abrir</button>
 
@@ -90,8 +105,6 @@ async function abrir(){
 
 const canal = document.getElementById("kick").value
 const twitch = document.getElementById("twitch").value
-
-/* pegar info da live */
 
 const res = await fetch(`https://kick.com/api/v2/channels/${canal}`)
 const data = await res.json()
@@ -111,14 +124,45 @@ hlsPlayer.attachMedia(video)
 
 video.src = hls
 
-/* chat twitch */
-
 document.getElementById("chat").src =
-`https://www.twitch.tv/embed/${twitch}/chat?parent=igorfioli.github.io&darkpopout`
+`https://www.twitch.tv/embed/${twitch}/chat?parent=igorfioli.github.io`
 
 }
+
+abrir()
+
+/* esconder barra */
+
+let timer
+
+function esconderBarra(){
+document.getElementById("top").classList.add("hidden")
+}
+
+function mostrarBarra(){
+
+const top = document.getElementById("top")
+
+top.classList.remove("hidden")
+
+clearTimeout(timer)
+
+timer = setTimeout(esconderBarra,3000)
+
+}
+
+document.addEventListener("mousemove",(e)=>{
+
+if(e.clientY < 80){
+mostrarBarra()
+}
+
+})
+
+timer = setTimeout(esconderBarra,3000)
 
 </script>
 
 </body>
 </html>
+```
