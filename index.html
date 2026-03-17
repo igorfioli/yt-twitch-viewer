@@ -454,7 +454,8 @@ async function abrir() {
 
   // Stream Kick
   try {
-    const res  = await fetch(`https://kick.com/api/v2/channels/${canal}`);
+    const proxy = 'https://corsproxy.io/?';
+    const res  = await fetch(`${proxy}https://kick.com/api/v2/channels/${canal}`);
     const data = await res.json();
     const hlsUrl = data.playback_url;
 
@@ -462,7 +463,7 @@ async function abrir() {
 
     if (Hls.isSupported()) {
       hlsPlayer = new Hls({ enableWorker: true, lowLatencyMode: true });
-      hlsPlayer.loadSource(hlsUrl);
+      hlsPlayer.loadSource(`${proxy}${hlsUrl}`);
       hlsPlayer.attachMedia(srcVideo);
       hlsPlayer.on(Hls.Events.MANIFEST_PARSED, () => srcVideo.play());
     } else {
