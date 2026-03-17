@@ -1,168 +1,496 @@
-```html
 <!DOCTYPE html>
 <html lang="pt-BR">
 <head>
 <meta charset="UTF-8">
 <title>Stream Viewer</title>
-
 <script src="https://cdn.jsdelivr.net/npm/hls.js@latest"></script>
-
 <style>
+  * { box-sizing: border-box; margin: 0; padding: 0; }
 
-body{
-margin:0;
-background:#000;
-display:flex;
-height:100vh;
-overflow:hidden;
-font-family:sans-serif;
-}
+  body {
+    background: #0a0a0a;
+    display: flex;
+    height: 100vh;
+    overflow: hidden;
+    font-family: 'Segoe UI', sans-serif;
+    color: #fff;
+  }
 
-/* área do vídeo */
+  #videoArea {
+    flex: 3;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    background: #000;
+    position: relative;
+  }
 
-#videoArea{
-flex:3;
-display:flex;
-justify-content:center;
-align-items:center;
-background:black;
-}
+  /* O <video> fica oculto — só serve de fonte pro WebGL */
+  video#srcVideo {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    opacity: 0;
+    pointer-events: none;
+  }
 
-video{
-width:100%;
-height:100%;
-object-fit:contain;
-background:black;
-}
+  canvas#glCanvas {
+    width: 100%;
+    height: 100%;
+    object-fit: contain;
+    display: block;
+    background: #000;
+  }
 
-/* chat */
+  #chat { flex: 1; border: 0; }
 
-#chat{
-flex:1;
-border:0;
-}
+  /* Barra superior */
+  #top {
+    position: fixed;
+    top: 0; left: 0; right: 0;
+    background: rgba(15,15,15,0.95);
+    backdrop-filter: blur(10px);
+    padding: 8px 12px;
+    display: flex;
+    gap: 8px;
+    align-items: center;
+    z-index: 100;
+    opacity: 1;
+    transition: opacity .4s;
+    border-bottom: 1px solid #222;
+  }
+  #top.hidden { opacity: 0; pointer-events: none; }
 
-/* barra superior */
+  input {
+    padding: 6px 10px;
+    border: 1px solid #333;
+    border-radius: 4px;
+    background: #1a1a1a;
+    color: #fff;
+    font-size: 13px;
+  }
+  input:focus { outline: none; border-color: #6441a5; }
 
-#top{
-position:fixed;
-top:0;
-left:0;
-right:0;
-background:#111;
-padding:8px;
-display:flex;
-gap:8px;
-z-index:10;
+  button {
+    padding: 6px 12px;
+    background: #6441a5;
+    border: none;
+    color: white;
+    border-radius: 4px;
+    cursor: pointer;
+    font-size: 13px;
+    transition: background .2s;
+  }
+  button:hover { background: #7d5bbe; }
 
-opacity:1;
-transition:opacity .4s;
-}
+  /* Badge de qualidade */
+  #qualityBadge {
+    position: fixed;
+    bottom: 12px;
+    left: 12px;
+    background: rgba(0,0,0,0.7);
+    border: 1px solid #333;
+    border-radius: 6px;
+    padding: 6px 10px;
+    font-size: 11px;
+    display: flex;
+    gap: 8px;
+    align-items: center;
+    z-index: 50;
+    transition: opacity .3s;
+  }
+  #qualityBadge .dot {
+    width: 7px; height: 7px;
+    border-radius: 50%;
+    background: #4ade80;
+    box-shadow: 0 0 6px #4ade80;
+  }
+  #qualityBadge.off .dot { background: #ef4444; box-shadow: 0 0 6px #ef4444; }
 
-#top.hidden{
-opacity:0;
-pointer-events:none;
-}
-
-input{
-padding:6px;
-border:none;
-border-radius:4px;
-}
-
-button{
-padding:6px 10px;
-background:#6441a5;
-border:none;
-color:white;
-border-radius:4px;
-cursor:pointer;
-}
-
+  /* Seletor de modo */
+  #modeSelector {
+    display: flex;
+    gap: 4px;
+  }
+  .modeBtn {
+    padding: 4px 8px;
+    font-size: 11px;
+    background: #222;
+    border: 1px solid #333;
+    color: #aaa;
+    border-radius: 3px;
+    cursor: pointer;
+    transition: all .15s;
+  }
+  .modeBtn.active {
+    background: #6441a5;
+    border-color: #6441a5;
+    color: #fff;
+  }
+  .modeBtn:hover:not(.active) { border-color: #555; color: #fff; }
 </style>
 </head>
-
 <body>
 
 <div id="top">
-
-<input id="kick" value="rnakano">
-<input id="twitch" value="rnakano">
-
-<button onclick="abrir()">Abrir</button>
-
+  <input id="kick" value="rnakano" placeholder="Kick canal">
+  <input id="twitch" value="rnakano" placeholder="Twitch canal">
+  <button onclick="abrir()">Abrir</button>
+  <div id="modeSelector">
+    <button class="modeBtn" data-mode="off" onclick="setMode('off')">Off</button>
+    <button class="modeBtn active" data-mode="fast" onclick="setMode('fast')">Fast</button>
+    <button class="modeBtn" data-mode="balanced" onclick="setMode('balanced')">Balanced</button>
+    <button class="modeBtn" data-mode="quality" onclick="setMode('quality')">Quality</button>
+  </div>
 </div>
 
 <div id="videoArea">
-<video id="video" controls autoplay></video>
+  <video id="srcVideo" autoplay muted playsinline crossorigin="anonymous"></video>
+  <canvas id="glCanvas"></canvas>
 </div>
-
 <iframe id="chat"></iframe>
 
+<div id="qualityBadge">
+  <div class="dot"></div>
+  <span id="badgeText">Anime4K Fast</span>
+</div>
+
 <script>
+// ─────────────────────────────────────────────
+// SHADERS ANIME4K (WebGL)
+// ─────────────────────────────────────────────
 
-async function abrir(){
+const VERT_SRC = `
+  attribute vec2 a_position;
+  attribute vec2 a_texCoord;
+  varying vec2 v_texCoord;
+  void main() {
+    gl_Position = vec4(a_position, 0, 1);
+    v_texCoord = a_texCoord;
+  }
+`;
 
-const canal = document.getElementById("kick").value
-const twitch = document.getElementById("twitch").value
+// Passthrough simples (modo off)
+const FRAG_PASSTHROUGH = `
+  precision mediump float;
+  uniform sampler2D u_texture;
+  varying vec2 v_texCoord;
+  void main() {
+    gl_FragColor = texture2D(u_texture, v_texCoord);
+  }
+`;
 
-const res = await fetch(`https://kick.com/api/v2/channels/${canal}`)
-const data = await res.json()
+// Fast: luma-based edge sharpening
+const FRAG_FAST = `
+  precision mediump float;
+  uniform sampler2D u_texture;
+  uniform vec2 u_texelSize;
+  varying vec2 v_texCoord;
 
-const hls = data.playback_url
+  float luma(vec3 c) { return dot(c, vec3(0.299, 0.587, 0.114)); }
 
-const video = document.getElementById("video")
+  void main() {
+    vec2 uv = v_texCoord;
+    vec4 center = texture2D(u_texture, uv);
+    vec4 n  = texture2D(u_texture, uv + vec2( 0, -u_texelSize.y));
+    vec4 s  = texture2D(u_texture, uv + vec2( 0,  u_texelSize.y));
+    vec4 e  = texture2D(u_texture, uv + vec2( u_texelSize.x, 0));
+    vec4 w  = texture2D(u_texture, uv + vec2(-u_texelSize.x, 0));
 
-if(Hls.isSupported()){
+    float lC = luma(center.rgb);
+    float lN = luma(n.rgb);
+    float lS = luma(s.rgb);
+    float lE = luma(e.rgb);
+    float lW = luma(w.rgb);
 
-const hlsPlayer = new Hls()
+    float maxL = max(max(lN,lS), max(lE,lW));
+    float minL = min(min(lN,lS), min(lE,lW));
+    float edge = (maxL - minL);
 
-hlsPlayer.loadSource(hls)
-hlsPlayer.attachMedia(video)
+    float strength = 0.35;
+    vec4 sharp = center + (center - (n+s+e+w)*0.25) * strength * edge * 4.0;
+    gl_FragColor = clamp(sharp, 0.0, 1.0);
+  }
+`;
 
+// Balanced: push-pull com gradiente direcional
+const FRAG_BALANCED = `
+  precision mediump float;
+  uniform sampler2D u_texture;
+  uniform vec2 u_texelSize;
+  varying vec2 v_texCoord;
+
+  float luma(vec3 c) { return dot(c, vec3(0.299, 0.587, 0.114)); }
+
+  void main() {
+    vec2 uv = v_texCoord;
+    vec2 ts = u_texelSize;
+
+    vec4 c  = texture2D(u_texture, uv);
+    vec4 n  = texture2D(u_texture, uv + vec2( 0,-ts.y));
+    vec4 s  = texture2D(u_texture, uv + vec2( 0, ts.y));
+    vec4 e  = texture2D(u_texture, uv + vec2( ts.x, 0));
+    vec4 w  = texture2D(u_texture, uv + vec2(-ts.x, 0));
+    vec4 ne = texture2D(u_texture, uv + vec2( ts.x,-ts.y));
+    vec4 nw = texture2D(u_texture, uv + vec2(-ts.x,-ts.y));
+    vec4 se = texture2D(u_texture, uv + vec2( ts.x, ts.y));
+    vec4 sw = texture2D(u_texture, uv + vec2(-ts.x, ts.y));
+
+    // Gradiente direcional
+    float gx = luma((ne+e+se).rgb) - luma((nw+w+sw).rgb);
+    float gy = luma((sw+s+se).rgb) - luma((nw+n+ne).rgb);
+    float edge = sqrt(gx*gx + gy*gy);
+
+    vec4 cross  = (n+s+e+w) * 0.25;
+    vec4 corner = (ne+nw+se+sw) * 0.25;
+    vec4 lp     = cross * 0.75 + corner * 0.25;
+
+    float strength = 0.5;
+    vec4 sharp = c + (c - lp) * strength * clamp(edge * 3.0, 0.0, 1.0);
+    gl_FragColor = clamp(sharp, 0.0, 1.0);
+  }
+`;
+
+// Quality: iteração dupla + preservação de cor via chroma
+const FRAG_QUALITY = `
+  precision highp float;
+  uniform sampler2D u_texture;
+  uniform vec2 u_texelSize;
+  varying vec2 v_texCoord;
+
+  float luma(vec3 c) { return dot(c, vec3(0.299, 0.587, 0.114)); }
+
+  vec4 sampleBicubic(sampler2D tex, vec2 uv, vec2 ts) {
+    vec2 f = fract(uv / ts);
+    vec2 p = (floor(uv / ts) + 0.5) * ts;
+    vec4 a = texture2D(tex, p + vec2(-ts.x, -ts.y));
+    vec4 b = texture2D(tex, p + vec2( 0.0,  -ts.y));
+    vec4 c2 = texture2D(tex, p + vec2( ts.x, -ts.y));
+    vec4 d = texture2D(tex, p + vec2(-ts.x,  0.0));
+    vec4 e = texture2D(tex, p);
+    vec4 f2 = texture2D(tex, p + vec2( ts.x,  0.0));
+    vec4 g = texture2D(tex, p + vec2(-ts.x,  ts.y));
+    vec4 h = texture2D(tex, p + vec2( 0.0,   ts.y));
+    vec4 i = texture2D(tex, p + vec2( ts.x,  ts.y));
+    vec4 row0 = mix(mix(a,b,f.x), mix(b,c2,f.x), f.x);
+    vec4 row1 = mix(mix(d,e,f.x), mix(e,f2,f.x), f.x);
+    vec4 row2 = mix(mix(g,h,f.x), mix(h,i,f.x), f.x);
+    return mix(mix(row0,row1,f.y), mix(row1,row2,f.y), f.y);
+  }
+
+  void main() {
+    vec2 uv = v_texCoord;
+    vec2 ts = u_texelSize;
+
+    vec4 center = texture2D(u_texture, uv);
+    float lC = luma(center.rgb);
+
+    // Vizinhos N/S/E/W + diagonais
+    vec4 n  = texture2D(u_texture, uv+vec2(0,-ts.y));
+    vec4 s  = texture2D(u_texture, uv+vec2(0, ts.y));
+    vec4 e  = texture2D(u_texture, uv+vec2( ts.x,0));
+    vec4 w  = texture2D(u_texture, uv+vec2(-ts.x,0));
+    vec4 ne = texture2D(u_texture, uv+vec2( ts.x,-ts.y));
+    vec4 nw = texture2D(u_texture, uv+vec2(-ts.x,-ts.y));
+    vec4 se = texture2D(u_texture, uv+vec2( ts.x, ts.y));
+    vec4 sw = texture2D(u_texture, uv+vec2(-ts.x, ts.y));
+
+    // Magnitude do gradiente
+    float gx = luma((ne+e+se).rgb) - luma((nw+w+sw).rgb);
+    float gy = luma((sw+s+se).rgb) - luma((nw+n+ne).rgb);
+    float edge = clamp(sqrt(gx*gx + gy*gy) * 3.0, 0.0, 1.0);
+
+    // Unsharp mask com peso adaptativo
+    vec4 blur   = (n+s+e+w)*0.2 + (ne+nw+se+sw)*0.05 + center*0.4;
+    float umask = luma(center.rgb) - luma(blur.rgb);
+    float adaptStr = 0.7 * edge;
+
+    // Aplica no luma, preserva chroma
+    float newLuma = lC + umask * adaptStr;
+    float scale   = (lC > 0.001) ? (newLuma / lC) : 1.0;
+    vec3 sharp    = center.rgb * clamp(scale, 0.5, 2.0);
+
+    // Segunda passagem leve anti-ringing
+    vec4 minN = min(min(n,s),min(e,w));
+    vec4 maxN = max(max(n,s),max(e,w));
+    vec3 clamped = clamp(sharp, minN.rgb - 0.05, maxN.rgb + 0.05);
+
+    gl_FragColor = vec4(clamped, center.a);
+  }
+`;
+
+// ─────────────────────────────────────────────
+// SETUP WEBGL
+// ─────────────────────────────────────────────
+
+const canvas  = document.getElementById('glCanvas');
+const gl      = canvas.getContext('webgl', { antialias: false });
+const srcVideo = document.getElementById('srcVideo');
+
+let currentMode = 'fast';
+let program = null;
+let texture = null;
+let rafId   = null;
+let hlsPlayer = null;
+
+function createShader(type, src) {
+  const sh = gl.createShader(type);
+  gl.shaderSource(sh, src);
+  gl.compileShader(sh);
+  return sh;
 }
 
-video.src = hls
-
-document.getElementById("chat").src =
-`https://www.twitch.tv/embed/${twitch}/chat?parent=igorfioli.github.io&darkpopout`
-
+function createProgram(fragSrc) {
+  const p = gl.createProgram();
+  gl.attachShader(p, createShader(gl.VERTEX_SHADER, VERT_SRC));
+  gl.attachShader(p, createShader(gl.FRAGMENT_SHADER, fragSrc));
+  gl.linkProgram(p);
+  return p;
 }
 
-abrir()
-
-/* esconder barra */
-
-let timer
-
-function esconderBarra(){
-document.getElementById("top").classList.add("hidden")
+function getFragForMode(mode) {
+  return { off: FRAG_PASSTHROUGH, fast: FRAG_FAST, balanced: FRAG_BALANCED, quality: FRAG_QUALITY }[mode] || FRAG_FAST;
 }
 
-function mostrarBarra(){
+function initGL() {
+  // Quad cobrindo tela toda
+  const positions = new Float32Array([-1,-1, 1,-1, -1,1, 1,1]);
+  const texcoords = new Float32Array([ 0, 1, 1, 1,  0,0, 1,0]);
 
-const top = document.getElementById("top")
+  const posBuf = gl.createBuffer();
+  gl.bindBuffer(gl.ARRAY_BUFFER, posBuf);
+  gl.bufferData(gl.ARRAY_BUFFER, positions, gl.STATIC_DRAW);
 
-top.classList.remove("hidden")
+  const texBuf = gl.createBuffer();
+  gl.bindBuffer(gl.ARRAY_BUFFER, texBuf);
+  gl.bufferData(gl.ARRAY_BUFFER, texcoords, gl.STATIC_DRAW);
 
-clearTimeout(timer)
+  texture = gl.createTexture();
+  gl.bindTexture(gl.TEXTURE_2D, texture);
+  gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE);
+  gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE);
+  gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.LINEAR);
+  gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.LINEAR);
 
-timer = setTimeout(esconderBarra,3000)
+  function buildProgram() {
+    if (program) gl.deleteProgram(program);
+    program = createProgram(getFragForMode(currentMode));
+    gl.useProgram(program);
 
+    gl.bindBuffer(gl.ARRAY_BUFFER, posBuf);
+    const posLoc = gl.getAttribLocation(program, 'a_position');
+    gl.enableVertexAttribArray(posLoc);
+    gl.vertexAttribPointer(posLoc, 2, gl.FLOAT, false, 0, 0);
+
+    gl.bindBuffer(gl.ARRAY_BUFFER, texBuf);
+    const texLoc = gl.getAttribLocation(program, 'a_texCoord');
+    gl.enableVertexAttribArray(texLoc);
+    gl.vertexAttribPointer(texLoc, 2, gl.FLOAT, false, 0, 0);
+  }
+
+  buildProgram();
+
+  // Rebuild quando trocar modo
+  window._rebuildProgram = buildProgram;
+
+  // Loop de renderização
+  function render() {
+    rafId = requestAnimationFrame(render);
+    if (srcVideo.readyState < 2) return;
+
+    // Ajusta canvas ao vídeo
+    if (canvas.width !== srcVideo.videoWidth || canvas.height !== srcVideo.videoHeight) {
+      canvas.width  = srcVideo.videoWidth  || 1280;
+      canvas.height = srcVideo.videoHeight || 720;
+      gl.viewport(0, 0, canvas.width, canvas.height);
+    }
+
+    gl.useProgram(program);
+    gl.bindTexture(gl.TEXTURE_2D, texture);
+    gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, gl.RGBA, gl.UNSIGNED_BYTE, srcVideo);
+
+    const tsLoc = gl.getUniformLocation(program, 'u_texelSize');
+    if (tsLoc) gl.uniform2f(tsLoc, 1.0 / canvas.width, 1.0 / canvas.height);
+
+    gl.drawArrays(gl.TRIANGLE_STRIP, 0, 4);
+  }
+
+  render();
 }
 
-document.addEventListener("mousemove",(e)=>{
+// ─────────────────────────────────────────────
+// CONTROLES DE MODO
+// ─────────────────────────────────────────────
 
-if(e.clientY < 80){
-mostrarBarra()
+function setMode(mode) {
+  currentMode = mode;
+  document.querySelectorAll('.modeBtn').forEach(b => b.classList.toggle('active', b.dataset.mode === mode));
+
+  const badge = document.getElementById('qualityBadge');
+  const text  = document.getElementById('badgeText');
+
+  if (mode === 'off') {
+    badge.classList.add('off');
+    text.textContent = 'Anime4K Off';
+  } else {
+    badge.classList.remove('off');
+    text.textContent = `Anime4K ${mode.charAt(0).toUpperCase()+mode.slice(1)}`;
+  }
+
+  if (window._rebuildProgram) window._rebuildProgram();
 }
 
-})
+// ─────────────────────────────────────────────
+// ABRIR STREAM
+// ─────────────────────────────────────────────
 
-timer = setTimeout(esconderBarra,3000)
+async function abrir() {
+  const canal  = document.getElementById('kick').value.trim();
+  const twitch = document.getElementById('twitch').value.trim();
 
+  // Chat
+  document.getElementById('chat').src =
+    `https://www.twitch.tv/embed/${twitch}/chat?parent=${location.hostname}&darkpopout`;
+
+  // Stream Kick
+  try {
+    const res  = await fetch(`https://kick.com/api/v2/channels/${canal}`);
+    const data = await res.json();
+    const hlsUrl = data.playback_url;
+
+    if (hlsPlayer) { hlsPlayer.destroy(); hlsPlayer = null; }
+
+    if (Hls.isSupported()) {
+      hlsPlayer = new Hls({ enableWorker: true, lowLatencyMode: true });
+      hlsPlayer.loadSource(hlsUrl);
+      hlsPlayer.attachMedia(srcVideo);
+      hlsPlayer.on(Hls.Events.MANIFEST_PARSED, () => srcVideo.play());
+    } else {
+      srcVideo.src = hlsUrl;
+      srcVideo.play();
+    }
+  } catch(e) {
+    console.error('Erro ao carregar stream:', e);
+  }
+}
+
+// ─────────────────────────────────────────────
+// INIT
+// ─────────────────────────────────────────────
+
+initGL();
+abrir();
+
+// Esconder barra
+let timer;
+function esconderBarra() { document.getElementById('top').classList.add('hidden'); }
+function mostrarBarra() {
+  document.getElementById('top').classList.remove('hidden');
+  clearTimeout(timer);
+  timer = setTimeout(esconderBarra, 3000);
+}
+document.addEventListener('mousemove', e => { if (e.clientY < 80) mostrarBarra(); });
+timer = setTimeout(esconderBarra, 3000);
 </script>
-
 </body>
 </html>
-```
