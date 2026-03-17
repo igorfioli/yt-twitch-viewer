@@ -454,16 +454,21 @@ async function abrir() {
 
   // Stream Kick
   try {
-    const proxy = 'https://corsproxy.io/?';
-    const res  = await fetch(`${proxy}https://kick.com/api/v2/channels/${canal}`);
+    const proxy = 'https://api.allorigins.win/raw?url=';
+    const apiUrl = encodeURIComponent(`https://kick.com/api/v2/channels/${canal}`);
+    const res  = await fetch(`${proxy}${apiUrl}`);
     const data = await res.json();
-    const hlsUrl = data.playback_url;
+    console.log('Kick API response:', JSON.stringify(data).slice(0, 500));
+
+    const hlsUrl = data?.livestream?.playback_url || data?.playback_url;
+    console.log('HLS URL:', hlsUrl);
+    if (!hlsUrl) { console.error('Canal offline ou HLS URL nao encontrado'); return; }
 
     if (hlsPlayer) { hlsPlayer.destroy(); hlsPlayer = null; }
 
     if (Hls.isSupported()) {
       hlsPlayer = new Hls({ enableWorker: true, lowLatencyMode: true });
-      hlsPlayer.loadSource(`${proxy}${hlsUrl}`);
+      hlsPlayer.loadSource(hlsUrl);
       hlsPlayer.attachMedia(srcVideo);
       hlsPlayer.on(Hls.Events.MANIFEST_PARSED, () => srcVideo.play());
     } else {
