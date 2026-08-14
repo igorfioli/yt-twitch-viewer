@@ -250,7 +250,7 @@
     <iframe id="yt-frame" class="hidden" allow="autoplay; fullscreen; encrypted-media" title="YouTube stream"></iframe>
     <div id="yt-placeholder" class="placeholder">
       <div class="glyph yt-c">YouTube — Sinal de vídeo</div>
-      <div class="sub">Digite o <b>@nome</b> do canal (ou cole o link) ali em cima para carregar a live atual.</div>
+      <div class="sub">Digite o nome do canal (ex: nak ou @nak) ali em cima para carregar a live atual.</div>
     </div>
   </div>
   <div id="twitch-pane">
@@ -271,7 +271,7 @@
 
   <div class="deck-channel">
     <span class="deck-label"><span class="led" id="yt-led"></span>YouTube</span>
-    <input type="text" id="yt-input" placeholder="nome do canal (ex: @cazetv) ou link" autocomplete="off" spellcheck="false">
+    <input type="text" id="yt-input" placeholder="nome do canal (ex: nak) ou link" autocomplete="off" spellcheck="false">
   </div>
 
   <div class="deck-channel">
@@ -324,19 +324,31 @@
       return { type: 'channel', id: str };
     }
 
-    // 3. Busca pelo nome usando a DecAPI
-    var channelName = str.replace(/^@/, '');
+    // 3. Busca primária: LemnosLife API (Lida bem com @handles novos e canais menores)
+    var handle = str.startsWith('@') ? str : '@' + str;
     try {
-        var response = await fetch('https://decapi.me/youtube/channel_id/' + encodeURIComponent(channelName));
+        var res = await fetch('https://yt.lemnoslife.com/channels?handle=' + encodeURIComponent(handle));
+        var data = await res.json();
+        if (data && data.items && data.items.length > 0) {
+            return { type: 'channel', id: data.items[0].id };
+        }
+    } catch(e) {
+        console.warn("LemnosLife falhou, tentando fallback...");
+    }
+
+    // 4. Fallback: DecAPI (Para canais mais antigos)
+    var cleanName = str.replace(/^@/, '');
+    try {
+        var response = await fetch('https://decapi.me/youtube/channel_id/' + encodeURIComponent(cleanName));
         var text = await response.text();
         
         if (text.startsWith('UC') && text.length >= 24) {
             return { type: 'channel', id: text };
         } else {
-            return { type: 'error', msg: 'Canal não encontrado: ' + text };
+            return { type: 'error', msg: 'Não consegui localizar este canal. Verifique se o nome exato (arroba) está correto ou cole o link da live.' };
         }
     } catch (e) {
-        return { type: 'error', msg: 'Falha ao buscar o canal na API. O serviço pode estar fora do ar.' };
+        return { type: 'error', msg: 'Falha de comunicação com as APIs de busca.' };
     }
   }
 
@@ -421,7 +433,6 @@
     var ytVal = ytInput.value;
     var twVal = twitchInput.value;
     
-    // Feedback visual no botão
     var prevText = loadAllBtn.textContent;
     loadAllBtn.textContent = "Buscando...";
     loadAllBtn.disabled = true;
