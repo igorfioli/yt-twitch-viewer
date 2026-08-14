@@ -185,7 +185,8 @@
     transition:all .15s;
     white-space:nowrap;
   }
-  .deck-go:hover{background:transparent;color:var(--text);}
+  .deck-go:hover:not(:disabled){background:transparent;color:var(--text);}
+  .deck-go:disabled{opacity:0.6;cursor:not-allowed;}
 
   .deck-aux{
     display:flex;align-items:center;
@@ -249,14 +250,14 @@
     <iframe id="yt-frame" class="hidden" allow="autoplay; fullscreen; encrypted-media" title="YouTube stream"></iframe>
     <div id="yt-placeholder" class="placeholder">
       <div class="glyph yt-c">YouTube — Sinal de vídeo</div>
-      <div class="sub">Cole o link da live (ou ID do vídeo) no YouTube ali em cima.</div>
+      <div class="sub">Digite o <b>@nome</b> do canal (ou cole o link) ali em cima para carregar a live atual.</div>
     </div>
   </div>
   <div id="twitch-pane">
     <iframe id="twitch-frame" class="hidden" title="Twitch chat"></iframe>
     <div id="twitch-placeholder" class="placeholder">
       <div class="glyph twitch-c">Twitch — Comentários</div>
-      <div class="sub">Digite o nome do canal na Twitch, ali em cima.</div>
+      <div class="sub">Digite o nome do canal na Twitch ali em cima.</div>
     </div>
   </div>
   <div id="seam"></div>
@@ -270,7 +271,7 @@
 
   <div class="deck-channel">
     <span class="deck-label"><span class="led" id="yt-led"></span>YouTube</span>
-    <input type="text" id="yt-input" placeholder="Link da live ou ID (ex: dQw4w9WgXcQ)" autocomplete="off" spellcheck="false">
+    <input type="text" id="yt-input" placeholder="nome do canal (ex: @cazetv) ou link" autocomplete="off" spellcheck="false">
   </div>
 
   <div class="deck-channel">
@@ -305,12 +306,38 @@
   var pinned = localStorage.getItem('duocast_pinned') === '1';
   var hideTimer = null;
 
-  // Extrai o ID de um link do Youtube ou devolve o proprio texto se já for um ID
-  function extractYTVideoID(input) {
+  async function resolveYTInput(input) {
     var str = input.trim();
     if (!str) return null;
-    var match = str.match(/(?:youtu\.be\/|youtube\.com\/(?:embed\/|v\/|watch\?v=|watch\?.+&v=|live\/))([^"&?\/\s]{11})/);
-    return match ? match[1] : str;
+
+    // 1. Link direto ou Video ID puro (11 caracteres)
+    var match = str.match(/(?:youtu\.be\/|youtube\.com\/(?:embed\/|v\/|watch\?v=|watch\?.+&v=|live\/))([a-zA-Z0-9_-]{11})/);
+    if (match) {
+        return { type: 'video', id: match[1] };
+    }
+    if (/^[a-zA-Z0-9_-]{11}$/.test(str)) {
+        return { type: 'video', id: str };
+    }
+
+    // 2. ID do Canal puro (UC...)
+    if (/^UC[\w-]{22}$/.test(str)) {
+      return { type: 'channel', id: str };
+    }
+
+    // 3. Busca pelo nome usando a DecAPI
+    var channelName = str.replace(/^@/, '');
+    try {
+        var response = await fetch('https://decapi.me/youtube/channel_id/' + encodeURIComponent(channelName));
+        var text = await response.text();
+        
+        if (text.startsWith('UC') && text.length >= 24) {
+            return { type: 'channel', id: text };
+        } else {
+            return { type: 'error', msg: 'Canal não encontrado: ' + text };
+        }
+    } catch (e) {
+        return { type: 'error', msg: 'Falha ao buscar o canal na API. O serviço pode estar fora do ar.' };
+    }
   }
 
   function sanitizeTwitch(name){
@@ -353,16 +380,28 @@
   }
   pinBtn.addEventListener('click', function(){ setPinned(!pinned); });
 
-  function loadYT(rawInput){
-    var id = extractYTVideoID(rawInput);
-    if (!id) return;
-    ytInput.value = rawInput; // Mantém o que o usuario colou
-    ytFrame.src = 'https://www.youtube.com/embed/' + encodeURIComponent(id) + '?autoplay=1';
+  async function loadYT(rawInput){
+    var parsed = await resolveYTInput(rawInput);
+    if (!parsed) return;
+
+    if (parsed.type === 'error') {
+        alert(parsed.msg);
+        return;
+    }
+    
+    ytInput.value = rawInput; 
+    
+    if (parsed.type === 'channel') {
+        ytFrame.src = 'https://www.youtube.com/embed/live_stream?channel=' + encodeURIComponent(parsed.id) + '&autoplay=1';
+    } else {
+        ytFrame.src = 'https://www.youtube.com/embed/' + encodeURIComponent(parsed.id) + '?autoplay=1';
+    }
+    
     ytFrame.classList.remove('hidden');
     ytPlaceholder.classList.add('hidden');
     ytLed.classList.add('on-yt');
     localStorage.setItem('duocast_yt', rawInput);
-    updateURL('yt', id);
+    updateURL('yt', rawInput);
   }
 
   function loadTwitch(name){
@@ -378,9 +417,22 @@
     updateURL('twitch', name);
   }
 
-  function loadAll() {
-    loadYT(ytInput.value);
-    loadTwitch(twitchInput.value);
+  async function loadAll() {
+    var ytVal = ytInput.value;
+    var twVal = twitchInput.value;
+    
+    // Feedback visual no botão
+    var prevText = loadAllBtn.textContent;
+    loadAllBtn.textContent = "Buscando...";
+    loadAllBtn.disabled = true;
+
+    try {
+      if(twVal) loadTwitch(twVal);
+      if(ytVal) await loadYT(ytVal);
+    } finally {
+      loadAllBtn.textContent = prevText;
+      loadAllBtn.disabled = false;
+    }
   }
 
   function updateURL(param, value) {
@@ -393,7 +445,6 @@
   ytInput.addEventListener('keydown', function(e){ if (e.key === 'Enter') loadAll(); });
   twitchInput.addEventListener('keydown', function(e){ if (e.key === 'Enter') loadAll(); });
 
-  // restore from URL params first, then localStorage
   var params = new URLSearchParams(window.location.search);
   var initYT = params.get('yt') || localStorage.getItem('duocast_yt');
   var initTwitch = params.get('twitch') || localStorage.getItem('duocast_twitch');
@@ -403,7 +454,6 @@
 
   if (pinned) setPinned(true);
 
-  // show the deck briefly on load so the user notices it
   showDeck();
   setTimeout(function(){ if (!pinned) scheduleHide(); }, 2200);
 })();
