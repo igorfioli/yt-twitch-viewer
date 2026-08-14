@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>DUOCAST — Kick + Twitch</title>
+<title>DUOCAST — YouTube + Twitch</title>
 <link rel="icon" href="data:,">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -16,11 +16,10 @@
     --hairline:#1f2025;
     --text:#ececee;
     --text-dim:#6b6f76;
-    --kick:#53fc18;
-    --kick-dim:#2c8a0d;
+    --yt:#ff0000;
+    --yt-dim:#cc0000;
     --twitch:#9146ff;
     --twitch-dim:#5c2ba8;
-    --danger:#ff4d4d;
   }
   *{box-sizing:border-box;}
   html,body{
@@ -30,7 +29,7 @@
     font-family:'Inter',sans-serif;
     overflow:hidden;
   }
-  ::selection{background:var(--kick);color:#04180a;}
+  ::selection{background:var(--twitch);color:#fff;}
 
   /* ---------- layout skeleton ---------- */
   #stage{
@@ -38,7 +37,7 @@
     display:flex;
     flex-direction:row;
   }
-  #kick-pane{
+  #yt-pane{
     flex:0 0 68%;
     position:relative;
     background:#000;
@@ -51,7 +50,7 @@
     background:var(--panel);
     min-width:0;
   }
-  #kick-frame, #twitch-frame{
+  #yt-frame, #twitch-frame{
     width:100%;height:100%;border:0;display:block;
   }
 
@@ -64,8 +63,8 @@
     transform:translateX(-1px);
     z-index:5;
     pointer-events:none;
-    background:linear-gradient(180deg, var(--kick) 0%, var(--hairline) 45%, var(--hairline) 55%, var(--twitch) 100%);
-    opacity:.55;
+    background:linear-gradient(180deg, var(--yt) 0%, var(--hairline) 45%, var(--hairline) 55%, var(--twitch) 100%);
+    opacity:.65;
   }
 
   /* ---------- empty-state placeholders ---------- */
@@ -85,7 +84,7 @@
     letter-spacing:.14em;
     text-transform:uppercase;
   }
-  .placeholder .glyph.kick-c{color:var(--kick-dim);}
+  .placeholder .glyph.yt-c{color:var(--yt-dim);}
   .placeholder .glyph.twitch-c{color:var(--twitch-dim);}
   .placeholder .sub{font-size:12px;color:var(--text-dim);max-width:320px;line-height:1.6;}
   .hidden{display:none !important;}
@@ -119,7 +118,7 @@
     border-right:1px solid var(--hairline);
     white-space:nowrap;
   }
-  .deck-brand .dot-k{color:var(--kick);}
+  .deck-brand .dot-y{color:var(--yt);}
   .deck-brand .dot-t{color:var(--twitch);}
 
   .deck-channel{
@@ -131,7 +130,6 @@
     min-width:0;
     border-right:1px solid var(--hairline);
   }
-  .deck-channel:last-of-type{border-right:1px solid var(--hairline);}
 
   .deck-label{
     font-size:10px;
@@ -142,7 +140,7 @@
     display:flex;align-items:center;gap:6px;
   }
   .led{width:6px;height:6px;border-radius:50%;background:var(--text-dim);flex:none;}
-  .led.on-kick{background:var(--kick);box-shadow:0 0 6px var(--kick);}
+  .led.on-yt{background:var(--yt);box-shadow:0 0 6px var(--yt);}
   .led.on-twitch{background:var(--twitch);box-shadow:0 0 6px var(--twitch);}
 
   .deck-channel input[type="text"]{
@@ -158,28 +156,36 @@
     outline:none;
     transition:border-color .15s;
   }
-  #kick-channel:focus{border-color:var(--kick-dim);}
-  #twitch-channel:focus{border-color:var(--twitch-dim);}
+  #yt-input:focus{border-color:var(--yt-dim);}
+  #twitch-input:focus{border-color:var(--twitch-dim);}
   .deck-channel input[type="text"]::placeholder{color:var(--text-dim);}
+
+  .deck-action-group{
+    display:flex;
+    align-items:center;
+    padding:0 16px;
+    gap:10px;
+    border-right:1px solid var(--hairline);
+  }
 
   .deck-go{
     flex:none;
-    background:transparent;
-    border:1px solid var(--hairline);
-    color:var(--text);
+    background:var(--text);
+    border:1px solid var(--text);
+    color:var(--void);
     font-family:'JetBrains Mono',monospace;
+    font-weight:700;
     font-size:11px;
     letter-spacing:.08em;
     text-transform:uppercase;
-    padding:0 14px;
+    padding:0 20px;
     height:34px;
     border-radius:3px;
     cursor:pointer;
     transition:all .15s;
     white-space:nowrap;
   }
-  #kick-go:hover{border-color:var(--kick);color:var(--kick);}
-  #twitch-go:hover{border-color:var(--twitch);color:var(--twitch);}
+  .deck-go:hover{background:transparent;color:var(--text);}
 
   .deck-aux{
     display:flex;align-items:center;
@@ -224,32 +230,33 @@
 
   @media (max-width: 760px){
     #stage{flex-direction:column;}
-    #kick-pane{flex:0 0 55%;border-right:none;border-bottom:1px solid var(--hairline);}
+    #yt-pane{flex:0 0 55%;border-right:none;border-bottom:1px solid var(--hairline);}
     #twitch-pane{flex:1 1 auto;}
     #seam{left:0;right:0;top:55%;bottom:auto;height:2px;width:auto;
-      background:linear-gradient(90deg, var(--kick) 0%, var(--hairline) 45%, var(--hairline) 55%, var(--twitch) 100%);}
+      background:linear-gradient(90deg, var(--yt) 0%, var(--hairline) 45%, var(--hairline) 55%, var(--twitch) 100%);}
     #deck{flex-wrap:wrap;}
     .deck-brand{width:100%;border-right:none;border-bottom:1px solid var(--hairline);}
     .deck-channel{flex:1 1 100%;border-right:none;border-bottom:1px solid var(--hairline);}
-    .deck-aux{width:100%;justify-content:flex-end;}
+    .deck-action-group{width:100%;border-right:none;border-bottom:1px solid var(--hairline);padding:10px 16px;justify-content:center;}
+    .deck-aux{width:100%;justify-content:center;padding:10px 16px;}
   }
 </style>
 </head>
 <body>
 
 <div id="stage">
-  <div id="kick-pane">
-    <iframe id="kick-frame" class="hidden" allowfullscreen title="Kick stream"></iframe>
-    <div id="kick-placeholder" class="placeholder">
-      <div class="glyph kick-c">Kick — sinal de vídeo</div>
-      <div class="sub">Digite o nome do canal na Kick, ali em cima, e aperte carregar.</div>
+  <div id="yt-pane">
+    <iframe id="yt-frame" class="hidden" allow="autoplay; fullscreen; encrypted-media" title="YouTube stream"></iframe>
+    <div id="yt-placeholder" class="placeholder">
+      <div class="glyph yt-c">YouTube — Sinal de vídeo</div>
+      <div class="sub">Cole o link da live (ou ID do vídeo) no YouTube ali em cima.</div>
     </div>
   </div>
   <div id="twitch-pane">
     <iframe id="twitch-frame" class="hidden" title="Twitch chat"></iframe>
     <div id="twitch-placeholder" class="placeholder">
-      <div class="glyph twitch-c">Twitch — comentários</div>
-      <div class="sub">Digite o nome do canal na Twitch, ali em cima, e aperte carregar.</div>
+      <div class="glyph twitch-c">Twitch — Comentários</div>
+      <div class="sub">Digite o nome do canal na Twitch, ali em cima.</div>
     </div>
   </div>
   <div id="seam"></div>
@@ -259,18 +266,20 @@
 <div id="peek">passe o mouse aqui em cima</div>
 
 <div id="deck">
-  <div class="deck-brand"><span class="dot-k">KICK</span>&nbsp;/&nbsp;<span class="dot-t">TWITCH</span></div>
+  <div class="deck-brand"><span class="dot-y">YOUTUBE</span>&nbsp;/&nbsp;<span class="dot-t">TWITCH</span></div>
 
   <div class="deck-channel">
-    <span class="deck-label"><span class="led" id="kick-led"></span>Kick</span>
-    <input type="text" id="kick-channel" placeholder="nome do canal na kick" autocomplete="off" spellcheck="false">
-    <button class="deck-go" id="kick-go">Carregar</button>
+    <span class="deck-label"><span class="led" id="yt-led"></span>YouTube</span>
+    <input type="text" id="yt-input" placeholder="Link da live ou ID (ex: dQw4w9WgXcQ)" autocomplete="off" spellcheck="false">
   </div>
 
   <div class="deck-channel">
     <span class="deck-label"><span class="led" id="twitch-led"></span>Twitch</span>
-    <input type="text" id="twitch-channel" placeholder="nome do canal na twitch" autocomplete="off" spellcheck="false">
-    <button class="deck-go" id="twitch-go">Carregar</button>
+    <input type="text" id="twitch-input" placeholder="nome do canal" autocomplete="off" spellcheck="false">
+  </div>
+
+  <div class="deck-action-group">
+    <button class="deck-go" id="load-all-btn">Carregar</button>
   </div>
 
   <div class="deck-aux">
@@ -280,15 +289,14 @@
 
 <script>
 (function(){
-  var kickFrame = document.getElementById('kick-frame');
+  var ytFrame = document.getElementById('yt-frame');
   var twitchFrame = document.getElementById('twitch-frame');
-  var kickPlaceholder = document.getElementById('kick-placeholder');
+  var ytPlaceholder = document.getElementById('yt-placeholder');
   var twitchPlaceholder = document.getElementById('twitch-placeholder');
-  var kickInput = document.getElementById('kick-channel');
-  var twitchInput = document.getElementById('twitch-channel');
-  var kickGo = document.getElementById('kick-go');
-  var twitchGo = document.getElementById('twitch-go');
-  var kickLed = document.getElementById('kick-led');
+  var ytInput = document.getElementById('yt-input');
+  var twitchInput = document.getElementById('twitch-input');
+  var loadAllBtn = document.getElementById('load-all-btn');
+  var ytLed = document.getElementById('yt-led');
   var twitchLed = document.getElementById('twitch-led');
   var deck = document.getElementById('deck');
   var hotzone = document.getElementById('hotzone');
@@ -297,7 +305,15 @@
   var pinned = localStorage.getItem('duocast_pinned') === '1';
   var hideTimer = null;
 
-  function sanitize(name){
+  // Extrai o ID de um link do Youtube ou devolve o proprio texto se já for um ID
+  function extractYTVideoID(input) {
+    var str = input.trim();
+    if (!str) return null;
+    var match = str.match(/(?:youtu\.be\/|youtube\.com\/(?:embed\/|v\/|watch\?v=|watch\?.+&v=|live\/))([^"&?\/\s]{11})/);
+    return match ? match[1] : str;
+  }
+
+  function sanitizeTwitch(name){
     return name.trim().replace(/^@/, '').replace(/https?:\/\/[^\/]+\//, '').replace(/[^a-zA-Z0-9_]/g, '');
   }
 
@@ -309,7 +325,7 @@
     if (pinned) return;
     clearTimeout(hideTimer);
     hideTimer = setTimeout(function(){
-      if (document.activeElement === kickInput || document.activeElement === twitchInput) return;
+      if (document.activeElement === ytInput || document.activeElement === twitchInput) return;
       deck.classList.remove('visible');
     }, 180);
   }
@@ -318,15 +334,14 @@
   deck.addEventListener('mouseenter', showDeck);
   deck.addEventListener('mouseleave', scheduleHide);
   hotzone.addEventListener('mouseleave', function(){
-    // only schedule hide if the mouse didn't move into the deck itself
     setTimeout(function(){
       if (!deck.matches(':hover')) scheduleHide();
     }, 30);
   });
 
-  kickInput.addEventListener('focus', showDeck);
+  ytInput.addEventListener('focus', showDeck);
   twitchInput.addEventListener('focus', showDeck);
-  kickInput.addEventListener('blur', scheduleHide);
+  ytInput.addEventListener('blur', scheduleHide);
   twitchInput.addEventListener('blur', scheduleHide);
 
   function setPinned(state){
@@ -338,22 +353,20 @@
   }
   pinBtn.addEventListener('click', function(){ setPinned(!pinned); });
 
-  function loadKick(name){
-    name = sanitize(name);
-    if (!name) return;
-    kickInput.value = name;
-    kickFrame.src = 'https://player.kick.com/' + encodeURIComponent(name) + '?autoplay=true';
-    kickFrame.classList.remove('hidden');
-    kickPlaceholder.classList.add('hidden');
-    kickLed.classList.add('on-kick');
-    localStorage.setItem('duocast_kick', name);
-    var url = new URL(window.location.href);
-    url.searchParams.set('kick', name);
-    window.history.replaceState({}, '', url);
+  function loadYT(rawInput){
+    var id = extractYTVideoID(rawInput);
+    if (!id) return;
+    ytInput.value = rawInput; // Mantém o que o usuario colou
+    ytFrame.src = 'https://www.youtube.com/embed/' + encodeURIComponent(id) + '?autoplay=1';
+    ytFrame.classList.remove('hidden');
+    ytPlaceholder.classList.add('hidden');
+    ytLed.classList.add('on-yt');
+    localStorage.setItem('duocast_yt', rawInput);
+    updateURL('yt', id);
   }
 
   function loadTwitch(name){
-    name = sanitize(name);
+    name = sanitizeTwitch(name);
     if (!name) return;
     twitchInput.value = name;
     var parent = window.location.hostname || 'localhost';
@@ -362,21 +375,30 @@
     twitchPlaceholder.classList.add('hidden');
     twitchLed.classList.add('on-twitch');
     localStorage.setItem('duocast_twitch', name);
+    updateURL('twitch', name);
+  }
+
+  function loadAll() {
+    loadYT(ytInput.value);
+    loadTwitch(twitchInput.value);
+  }
+
+  function updateURL(param, value) {
     var url = new URL(window.location.href);
-    url.searchParams.set('twitch', name);
+    url.searchParams.set(param, value);
     window.history.replaceState({}, '', url);
   }
 
-  kickGo.addEventListener('click', function(){ loadKick(kickInput.value); });
-  twitchGo.addEventListener('click', function(){ loadTwitch(twitchInput.value); });
-  kickInput.addEventListener('keydown', function(e){ if (e.key === 'Enter') loadKick(kickInput.value); });
-  twitchInput.addEventListener('keydown', function(e){ if (e.key === 'Enter') loadTwitch(twitchInput.value); });
+  loadAllBtn.addEventListener('click', loadAll);
+  ytInput.addEventListener('keydown', function(e){ if (e.key === 'Enter') loadAll(); });
+  twitchInput.addEventListener('keydown', function(e){ if (e.key === 'Enter') loadAll(); });
 
   // restore from URL params first, then localStorage
   var params = new URLSearchParams(window.location.search);
-  var initKick = params.get('kick') || localStorage.getItem('duocast_kick');
+  var initYT = params.get('yt') || localStorage.getItem('duocast_yt');
   var initTwitch = params.get('twitch') || localStorage.getItem('duocast_twitch');
-  if (initKick) { kickInput.value = initKick; loadKick(initKick); }
+  
+  if (initYT) { ytInput.value = initYT; loadYT(initYT); }
   if (initTwitch) { twitchInput.value = initTwitch; loadTwitch(initTwitch); }
 
   if (pinned) setPinned(true);
