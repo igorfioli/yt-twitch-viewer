@@ -2,496 +2,390 @@
 <html lang="pt-BR">
 <head>
 <meta charset="UTF-8">
-<title>Stream Viewer</title>
-<script src="https://cdn.jsdelivr.net/npm/hls.js@latest"></script>
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>DUOCAST — Kick + Twitch</title>
+<link rel="icon" href="data:,">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;700&family=Inter:wght@400;500;600&display=swap" rel="stylesheet">
 <style>
-  * { box-sizing: border-box; margin: 0; padding: 0; }
+  :root{
+    --void:#0a0a0c;
+    --panel:#101013;
+    --panel-2:#151519;
+    --hairline:#1f2025;
+    --text:#ececee;
+    --text-dim:#6b6f76;
+    --kick:#53fc18;
+    --kick-dim:#2c8a0d;
+    --twitch:#9146ff;
+    --twitch-dim:#5c2ba8;
+    --danger:#ff4d4d;
+  }
+  *{box-sizing:border-box;}
+  html,body{
+    margin:0;padding:0;height:100%;
+    background:var(--void);
+    color:var(--text);
+    font-family:'Inter',sans-serif;
+    overflow:hidden;
+  }
+  ::selection{background:var(--kick);color:#04180a;}
 
-  body {
-    background: #0a0a0a;
-    display: flex;
-    height: 100vh;
-    overflow: hidden;
-    font-family: 'Segoe UI', sans-serif;
-    color: #fff;
+  /* ---------- layout skeleton ---------- */
+  #stage{
+    position:fixed;inset:0;
+    display:flex;
+    flex-direction:row;
+  }
+  #kick-pane{
+    flex:0 0 68%;
+    position:relative;
+    background:#000;
+    border-right:1px solid var(--hairline);
+    min-width:0;
+  }
+  #twitch-pane{
+    flex:1 1 auto;
+    position:relative;
+    background:var(--panel);
+    min-width:0;
+  }
+  #kick-frame, #twitch-frame{
+    width:100%;height:100%;border:0;display:block;
   }
 
-  #videoArea {
-    flex: 3;
-    display: flex;
-    justify-content: center;
-    align-items: center;
-    background: #000;
-    position: relative;
+  /* the seam: a live signal-merge indicator between panes */
+  #seam{
+    position:absolute;
+    top:0;bottom:0;
+    left:68%;
+    width:2px;
+    transform:translateX(-1px);
+    z-index:5;
+    pointer-events:none;
+    background:linear-gradient(180deg, var(--kick) 0%, var(--hairline) 45%, var(--hairline) 55%, var(--twitch) 100%);
+    opacity:.55;
   }
 
-  /* O <video> fica oculto — só serve de fonte pro WebGL */
-  video#srcVideo {
-    position: absolute;
-    width: 1px;
-    height: 1px;
-    opacity: 0;
-    pointer-events: none;
+  /* ---------- empty-state placeholders ---------- */
+  .placeholder{
+    position:absolute;inset:0;
+    display:flex;flex-direction:column;
+    align-items:center;justify-content:center;
+    gap:10px;
+    color:var(--text-dim);
+    font-family:'JetBrains Mono',monospace;
+    text-align:center;
+    padding:0 24px;
+    background:var(--panel);
   }
+  .placeholder .glyph{
+    font-size:13px;
+    letter-spacing:.14em;
+    text-transform:uppercase;
+  }
+  .placeholder .glyph.kick-c{color:var(--kick-dim);}
+  .placeholder .glyph.twitch-c{color:var(--twitch-dim);}
+  .placeholder .sub{font-size:12px;color:var(--text-dim);max-width:320px;line-height:1.6;}
+  .hidden{display:none !important;}
 
-  canvas#glCanvas {
-    width: 100%;
-    height: 100%;
-    object-fit: contain;
-    display: block;
-    background: #000;
+  /* ---------- top control deck ---------- */
+  #hotzone{
+    position:fixed;top:0;left:0;right:0;height:14px;z-index:30;
   }
+  #deck{
+    position:fixed;
+    top:0;left:0;right:0;
+    z-index:20;
+    display:flex;
+    align-items:stretch;
+    background:rgba(10,10,12,.92);
+    backdrop-filter:blur(10px);
+    border-bottom:1px solid var(--hairline);
+    transform:translateY(-100%);
+    transition:transform .28s cubic-bezier(.4,0,.2,1);
+    font-family:'JetBrains Mono',monospace;
+  }
+  #deck.visible{transform:translateY(0);}
 
-  #chat { flex: 1; border: 0; }
+  .deck-brand{
+    display:flex;align-items:center;
+    padding:0 18px;
+    font-size:13px;
+    font-weight:700;
+    letter-spacing:.12em;
+    color:var(--text);
+    border-right:1px solid var(--hairline);
+    white-space:nowrap;
+  }
+  .deck-brand .dot-k{color:var(--kick);}
+  .deck-brand .dot-t{color:var(--twitch);}
 
-  /* Barra superior */
-  #top {
-    position: fixed;
-    top: 0; left: 0; right: 0;
-    background: rgba(15,15,15,0.95);
-    backdrop-filter: blur(10px);
-    padding: 8px 12px;
-    display: flex;
-    gap: 8px;
-    align-items: center;
-    z-index: 100;
-    opacity: 1;
-    transition: opacity .4s;
-    border-bottom: 1px solid #222;
+  .deck-channel{
+    flex:1 1 0;
+    display:flex;
+    align-items:center;
+    gap:10px;
+    padding:10px 16px;
+    min-width:0;
+    border-right:1px solid var(--hairline);
   }
-  #top.hidden { opacity: 0; pointer-events: none; }
+  .deck-channel:last-of-type{border-right:1px solid var(--hairline);}
 
-  input {
-    padding: 6px 10px;
-    border: 1px solid #333;
-    border-radius: 4px;
-    background: #1a1a1a;
-    color: #fff;
-    font-size: 13px;
+  .deck-label{
+    font-size:10px;
+    letter-spacing:.14em;
+    text-transform:uppercase;
+    color:var(--text-dim);
+    white-space:nowrap;
+    display:flex;align-items:center;gap:6px;
   }
-  input:focus { outline: none; border-color: #6441a5; }
+  .led{width:6px;height:6px;border-radius:50%;background:var(--text-dim);flex:none;}
+  .led.on-kick{background:var(--kick);box-shadow:0 0 6px var(--kick);}
+  .led.on-twitch{background:var(--twitch);box-shadow:0 0 6px var(--twitch);}
 
-  button {
-    padding: 6px 12px;
-    background: #6441a5;
-    border: none;
-    color: white;
-    border-radius: 4px;
-    cursor: pointer;
-    font-size: 13px;
-    transition: background .2s;
+  .deck-channel input[type="text"]{
+    flex:1 1 auto;
+    min-width:60px;
+    background:var(--panel-2);
+    border:1px solid var(--hairline);
+    color:var(--text);
+    font-family:'Inter',sans-serif;
+    font-size:13px;
+    padding:8px 10px;
+    border-radius:3px;
+    outline:none;
+    transition:border-color .15s;
   }
-  button:hover { background: #7d5bbe; }
+  #kick-channel:focus{border-color:var(--kick-dim);}
+  #twitch-channel:focus{border-color:var(--twitch-dim);}
+  .deck-channel input[type="text"]::placeholder{color:var(--text-dim);}
 
-  /* Badge de qualidade */
-  #qualityBadge {
-    position: fixed;
-    bottom: 12px;
-    left: 12px;
-    background: rgba(0,0,0,0.7);
-    border: 1px solid #333;
-    border-radius: 6px;
-    padding: 6px 10px;
-    font-size: 11px;
-    display: flex;
-    gap: 8px;
-    align-items: center;
-    z-index: 50;
-    transition: opacity .3s;
+  .deck-go{
+    flex:none;
+    background:transparent;
+    border:1px solid var(--hairline);
+    color:var(--text);
+    font-family:'JetBrains Mono',monospace;
+    font-size:11px;
+    letter-spacing:.08em;
+    text-transform:uppercase;
+    padding:0 14px;
+    height:34px;
+    border-radius:3px;
+    cursor:pointer;
+    transition:all .15s;
+    white-space:nowrap;
   }
-  #qualityBadge .dot {
-    width: 7px; height: 7px;
-    border-radius: 50%;
-    background: #4ade80;
-    box-shadow: 0 0 6px #4ade80;
-  }
-  #qualityBadge.off .dot { background: #ef4444; box-shadow: 0 0 6px #ef4444; }
+  #kick-go:hover{border-color:var(--kick);color:var(--kick);}
+  #twitch-go:hover{border-color:var(--twitch);color:var(--twitch);}
 
-  /* Seletor de modo */
-  #modeSelector {
-    display: flex;
-    gap: 4px;
+  .deck-aux{
+    display:flex;align-items:center;
+    padding:0 16px;
+    gap:10px;
   }
-  .modeBtn {
-    padding: 4px 8px;
-    font-size: 11px;
-    background: #222;
-    border: 1px solid #333;
-    color: #aaa;
-    border-radius: 3px;
-    cursor: pointer;
-    transition: all .15s;
+  #pin-btn{
+    background:transparent;
+    border:1px solid var(--hairline);
+    color:var(--text-dim);
+    font-family:'JetBrains Mono',monospace;
+    font-size:10px;
+    letter-spacing:.1em;
+    text-transform:uppercase;
+    padding:8px 12px;
+    border-radius:3px;
+    cursor:pointer;
+    white-space:nowrap;
+    transition:all .15s;
   }
-  .modeBtn.active {
-    background: #6441a5;
-    border-color: #6441a5;
-    color: #fff;
+  #pin-btn:hover{color:var(--text);border-color:var(--text-dim);}
+  #pin-btn.active{color:var(--void);background:var(--text);border-color:var(--text);}
+
+  /* peek tab shown when deck is hidden */
+  #peek{
+    position:fixed;top:0;left:50%;transform:translateX(-50%);
+    z-index:19;
+    background:rgba(10,10,12,.85);
+    border:1px solid var(--hairline);
+    border-top:none;
+    color:var(--text-dim);
+    font-family:'JetBrains Mono',monospace;
+    font-size:10px;
+    letter-spacing:.12em;
+    text-transform:uppercase;
+    padding:4px 14px 5px;
+    border-radius:0 0 6px 6px;
+    pointer-events:none;
+    opacity:.8;
   }
-  .modeBtn:hover:not(.active) { border-color: #555; color: #fff; }
+  #deck.visible ~ #peek{display:none;}
+
+  @media (max-width: 760px){
+    #stage{flex-direction:column;}
+    #kick-pane{flex:0 0 55%;border-right:none;border-bottom:1px solid var(--hairline);}
+    #twitch-pane{flex:1 1 auto;}
+    #seam{left:0;right:0;top:55%;bottom:auto;height:2px;width:auto;
+      background:linear-gradient(90deg, var(--kick) 0%, var(--hairline) 45%, var(--hairline) 55%, var(--twitch) 100%);}
+    #deck{flex-wrap:wrap;}
+    .deck-brand{width:100%;border-right:none;border-bottom:1px solid var(--hairline);}
+    .deck-channel{flex:1 1 100%;border-right:none;border-bottom:1px solid var(--hairline);}
+    .deck-aux{width:100%;justify-content:flex-end;}
+  }
 </style>
 </head>
 <body>
 
-<div id="top">
-  <input id="kick" value="rnakano" placeholder="Kick canal">
-  <input id="twitch" value="rnakano" placeholder="Twitch canal">
-  <button onclick="abrir()">Abrir</button>
-  <div id="modeSelector">
-    <button class="modeBtn" data-mode="off" onclick="setMode('off')">Off</button>
-    <button class="modeBtn active" data-mode="fast" onclick="setMode('fast')">Fast</button>
-    <button class="modeBtn" data-mode="balanced" onclick="setMode('balanced')">Balanced</button>
-    <button class="modeBtn" data-mode="quality" onclick="setMode('quality')">Quality</button>
+<div id="stage">
+  <div id="kick-pane">
+    <iframe id="kick-frame" class="hidden" allowfullscreen title="Kick stream"></iframe>
+    <div id="kick-placeholder" class="placeholder">
+      <div class="glyph kick-c">Kick — sinal de vídeo</div>
+      <div class="sub">Digite o nome do canal na Kick, ali em cima, e aperte carregar.</div>
+    </div>
+  </div>
+  <div id="twitch-pane">
+    <iframe id="twitch-frame" class="hidden" title="Twitch chat"></iframe>
+    <div id="twitch-placeholder" class="placeholder">
+      <div class="glyph twitch-c">Twitch — comentários</div>
+      <div class="sub">Digite o nome do canal na Twitch, ali em cima, e aperte carregar.</div>
+    </div>
+  </div>
+  <div id="seam"></div>
+</div>
+
+<div id="hotzone"></div>
+<div id="peek">passe o mouse aqui em cima</div>
+
+<div id="deck">
+  <div class="deck-brand"><span class="dot-k">KICK</span>&nbsp;/&nbsp;<span class="dot-t">TWITCH</span></div>
+
+  <div class="deck-channel">
+    <span class="deck-label"><span class="led" id="kick-led"></span>Kick</span>
+    <input type="text" id="kick-channel" placeholder="nome do canal na kick" autocomplete="off" spellcheck="false">
+    <button class="deck-go" id="kick-go">Carregar</button>
+  </div>
+
+  <div class="deck-channel">
+    <span class="deck-label"><span class="led" id="twitch-led"></span>Twitch</span>
+    <input type="text" id="twitch-channel" placeholder="nome do canal na twitch" autocomplete="off" spellcheck="false">
+    <button class="deck-go" id="twitch-go">Carregar</button>
+  </div>
+
+  <div class="deck-aux">
+    <button id="pin-btn" title="Manter a barra sempre visível">Fixar barra</button>
   </div>
 </div>
 
-<div id="videoArea">
-  <video id="srcVideo" autoplay muted playsinline crossorigin="anonymous"></video>
-  <canvas id="glCanvas"></canvas>
-</div>
-<iframe id="chat"></iframe>
-
-<div id="qualityBadge">
-  <div class="dot"></div>
-  <span id="badgeText">Anime4K Fast</span>
-</div>
-
 <script>
-// ─────────────────────────────────────────────
-// SHADERS ANIME4K (WebGL)
-// ─────────────────────────────────────────────
+(function(){
+  var kickFrame = document.getElementById('kick-frame');
+  var twitchFrame = document.getElementById('twitch-frame');
+  var kickPlaceholder = document.getElementById('kick-placeholder');
+  var twitchPlaceholder = document.getElementById('twitch-placeholder');
+  var kickInput = document.getElementById('kick-channel');
+  var twitchInput = document.getElementById('twitch-channel');
+  var kickGo = document.getElementById('kick-go');
+  var twitchGo = document.getElementById('twitch-go');
+  var kickLed = document.getElementById('kick-led');
+  var twitchLed = document.getElementById('twitch-led');
+  var deck = document.getElementById('deck');
+  var hotzone = document.getElementById('hotzone');
+  var pinBtn = document.getElementById('pin-btn');
 
-const VERT_SRC = `
-  attribute vec2 a_position;
-  attribute vec2 a_texCoord;
-  varying vec2 v_texCoord;
-  void main() {
-    gl_Position = vec4(a_position, 0, 1);
-    v_texCoord = a_texCoord;
-  }
-`;
+  var pinned = localStorage.getItem('duocast_pinned') === '1';
+  var hideTimer = null;
 
-// Passthrough simples (modo off)
-const FRAG_PASSTHROUGH = `
-  precision mediump float;
-  uniform sampler2D u_texture;
-  varying vec2 v_texCoord;
-  void main() {
-    gl_FragColor = texture2D(u_texture, v_texCoord);
-  }
-`;
-
-// Fast: luma-based edge sharpening
-const FRAG_FAST = `
-  precision mediump float;
-  uniform sampler2D u_texture;
-  uniform vec2 u_texelSize;
-  varying vec2 v_texCoord;
-
-  float luma(vec3 c) { return dot(c, vec3(0.299, 0.587, 0.114)); }
-
-  void main() {
-    vec2 uv = v_texCoord;
-    vec4 center = texture2D(u_texture, uv);
-    vec4 n  = texture2D(u_texture, uv + vec2( 0, -u_texelSize.y));
-    vec4 s  = texture2D(u_texture, uv + vec2( 0,  u_texelSize.y));
-    vec4 e  = texture2D(u_texture, uv + vec2( u_texelSize.x, 0));
-    vec4 w  = texture2D(u_texture, uv + vec2(-u_texelSize.x, 0));
-
-    float lC = luma(center.rgb);
-    float lN = luma(n.rgb);
-    float lS = luma(s.rgb);
-    float lE = luma(e.rgb);
-    float lW = luma(w.rgb);
-
-    float maxL = max(max(lN,lS), max(lE,lW));
-    float minL = min(min(lN,lS), min(lE,lW));
-    float edge = (maxL - minL);
-
-    float strength = 0.35;
-    vec4 sharp = center + (center - (n+s+e+w)*0.25) * strength * edge * 4.0;
-    gl_FragColor = clamp(sharp, 0.0, 1.0);
-  }
-`;
-
-// Balanced: push-pull com gradiente direcional
-const FRAG_BALANCED = `
-  precision mediump float;
-  uniform sampler2D u_texture;
-  uniform vec2 u_texelSize;
-  varying vec2 v_texCoord;
-
-  float luma(vec3 c) { return dot(c, vec3(0.299, 0.587, 0.114)); }
-
-  void main() {
-    vec2 uv = v_texCoord;
-    vec2 ts = u_texelSize;
-
-    vec4 c  = texture2D(u_texture, uv);
-    vec4 n  = texture2D(u_texture, uv + vec2( 0,-ts.y));
-    vec4 s  = texture2D(u_texture, uv + vec2( 0, ts.y));
-    vec4 e  = texture2D(u_texture, uv + vec2( ts.x, 0));
-    vec4 w  = texture2D(u_texture, uv + vec2(-ts.x, 0));
-    vec4 ne = texture2D(u_texture, uv + vec2( ts.x,-ts.y));
-    vec4 nw = texture2D(u_texture, uv + vec2(-ts.x,-ts.y));
-    vec4 se = texture2D(u_texture, uv + vec2( ts.x, ts.y));
-    vec4 sw = texture2D(u_texture, uv + vec2(-ts.x, ts.y));
-
-    // Gradiente direcional
-    float gx = luma((ne+e+se).rgb) - luma((nw+w+sw).rgb);
-    float gy = luma((sw+s+se).rgb) - luma((nw+n+ne).rgb);
-    float edge = sqrt(gx*gx + gy*gy);
-
-    vec4 cross  = (n+s+e+w) * 0.25;
-    vec4 corner = (ne+nw+se+sw) * 0.25;
-    vec4 lp     = cross * 0.75 + corner * 0.25;
-
-    float strength = 0.5;
-    vec4 sharp = c + (c - lp) * strength * clamp(edge * 3.0, 0.0, 1.0);
-    gl_FragColor = clamp(sharp, 0.0, 1.0);
-  }
-`;
-
-// Quality: iteração dupla + preservação de cor via chroma
-const FRAG_QUALITY = `
-  precision highp float;
-  uniform sampler2D u_texture;
-  uniform vec2 u_texelSize;
-  varying vec2 v_texCoord;
-
-  float luma(vec3 c) { return dot(c, vec3(0.299, 0.587, 0.114)); }
-
-  vec4 sampleBicubic(sampler2D tex, vec2 uv, vec2 ts) {
-    vec2 f = fract(uv / ts);
-    vec2 p = (floor(uv / ts) + 0.5) * ts;
-    vec4 a = texture2D(tex, p + vec2(-ts.x, -ts.y));
-    vec4 b = texture2D(tex, p + vec2( 0.0,  -ts.y));
-    vec4 c2 = texture2D(tex, p + vec2( ts.x, -ts.y));
-    vec4 d = texture2D(tex, p + vec2(-ts.x,  0.0));
-    vec4 e = texture2D(tex, p);
-    vec4 f2 = texture2D(tex, p + vec2( ts.x,  0.0));
-    vec4 g = texture2D(tex, p + vec2(-ts.x,  ts.y));
-    vec4 h = texture2D(tex, p + vec2( 0.0,   ts.y));
-    vec4 i = texture2D(tex, p + vec2( ts.x,  ts.y));
-    vec4 row0 = mix(mix(a,b,f.x), mix(b,c2,f.x), f.x);
-    vec4 row1 = mix(mix(d,e,f.x), mix(e,f2,f.x), f.x);
-    vec4 row2 = mix(mix(g,h,f.x), mix(h,i,f.x), f.x);
-    return mix(mix(row0,row1,f.y), mix(row1,row2,f.y), f.y);
+  function sanitize(name){
+    return name.trim().replace(/^@/, '').replace(/https?:\/\/[^\/]+\//, '').replace(/[^a-zA-Z0-9_]/g, '');
   }
 
-  void main() {
-    vec2 uv = v_texCoord;
-    vec2 ts = u_texelSize;
-
-    vec4 center = texture2D(u_texture, uv);
-    float lC = luma(center.rgb);
-
-    // Vizinhos N/S/E/W + diagonais
-    vec4 n  = texture2D(u_texture, uv+vec2(0,-ts.y));
-    vec4 s  = texture2D(u_texture, uv+vec2(0, ts.y));
-    vec4 e  = texture2D(u_texture, uv+vec2( ts.x,0));
-    vec4 w  = texture2D(u_texture, uv+vec2(-ts.x,0));
-    vec4 ne = texture2D(u_texture, uv+vec2( ts.x,-ts.y));
-    vec4 nw = texture2D(u_texture, uv+vec2(-ts.x,-ts.y));
-    vec4 se = texture2D(u_texture, uv+vec2( ts.x, ts.y));
-    vec4 sw = texture2D(u_texture, uv+vec2(-ts.x, ts.y));
-
-    // Magnitude do gradiente
-    float gx = luma((ne+e+se).rgb) - luma((nw+w+sw).rgb);
-    float gy = luma((sw+s+se).rgb) - luma((nw+n+ne).rgb);
-    float edge = clamp(sqrt(gx*gx + gy*gy) * 3.0, 0.0, 1.0);
-
-    // Unsharp mask com peso adaptativo
-    vec4 blur   = (n+s+e+w)*0.2 + (ne+nw+se+sw)*0.05 + center*0.4;
-    float umask = luma(center.rgb) - luma(blur.rgb);
-    float adaptStr = 0.7 * edge;
-
-    // Aplica no luma, preserva chroma
-    float newLuma = lC + umask * adaptStr;
-    float scale   = (lC > 0.001) ? (newLuma / lC) : 1.0;
-    vec3 sharp    = center.rgb * clamp(scale, 0.5, 2.0);
-
-    // Segunda passagem leve anti-ringing
-    vec4 minN = min(min(n,s),min(e,w));
-    vec4 maxN = max(max(n,s),max(e,w));
-    vec3 clamped = clamp(sharp, minN.rgb - 0.05, maxN.rgb + 0.05);
-
-    gl_FragColor = vec4(clamped, center.a);
+  function showDeck(){
+    clearTimeout(hideTimer);
+    deck.classList.add('visible');
   }
-`;
-
-// ─────────────────────────────────────────────
-// SETUP WEBGL
-// ─────────────────────────────────────────────
-
-const canvas  = document.getElementById('glCanvas');
-const gl      = canvas.getContext('webgl', { antialias: false });
-const srcVideo = document.getElementById('srcVideo');
-
-let currentMode = 'fast';
-let program = null;
-let texture = null;
-let rafId   = null;
-let hlsPlayer = null;
-
-function createShader(type, src) {
-  const sh = gl.createShader(type);
-  gl.shaderSource(sh, src);
-  gl.compileShader(sh);
-  return sh;
-}
-
-function createProgram(fragSrc) {
-  const p = gl.createProgram();
-  gl.attachShader(p, createShader(gl.VERTEX_SHADER, VERT_SRC));
-  gl.attachShader(p, createShader(gl.FRAGMENT_SHADER, fragSrc));
-  gl.linkProgram(p);
-  return p;
-}
-
-function getFragForMode(mode) {
-  return { off: FRAG_PASSTHROUGH, fast: FRAG_FAST, balanced: FRAG_BALANCED, quality: FRAG_QUALITY }[mode] || FRAG_FAST;
-}
-
-function initGL() {
-  // Quad cobrindo tela toda
-  const positions = new Float32Array([-1,-1, 1,-1, -1,1, 1,1]);
-  const texcoords = new Float32Array([ 0, 1, 1, 1,  0,0, 1,0]);
-
-  const posBuf = gl.createBuffer();
-  gl.bindBuffer(gl.ARRAY_BUFFER, posBuf);
-  gl.bufferData(gl.ARRAY_BUFFER, positions, gl.STATIC_DRAW);
-
-  const texBuf = gl.createBuffer();
-  gl.bindBuffer(gl.ARRAY_BUFFER, texBuf);
-  gl.bufferData(gl.ARRAY_BUFFER, texcoords, gl.STATIC_DRAW);
-
-  texture = gl.createTexture();
-  gl.bindTexture(gl.TEXTURE_2D, texture);
-  gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE);
-  gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE);
-  gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.LINEAR);
-  gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.LINEAR);
-
-  function buildProgram() {
-    if (program) gl.deleteProgram(program);
-    program = createProgram(getFragForMode(currentMode));
-    gl.useProgram(program);
-
-    gl.bindBuffer(gl.ARRAY_BUFFER, posBuf);
-    const posLoc = gl.getAttribLocation(program, 'a_position');
-    gl.enableVertexAttribArray(posLoc);
-    gl.vertexAttribPointer(posLoc, 2, gl.FLOAT, false, 0, 0);
-
-    gl.bindBuffer(gl.ARRAY_BUFFER, texBuf);
-    const texLoc = gl.getAttribLocation(program, 'a_texCoord');
-    gl.enableVertexAttribArray(texLoc);
-    gl.vertexAttribPointer(texLoc, 2, gl.FLOAT, false, 0, 0);
+  function scheduleHide(){
+    if (pinned) return;
+    clearTimeout(hideTimer);
+    hideTimer = setTimeout(function(){
+      if (document.activeElement === kickInput || document.activeElement === twitchInput) return;
+      deck.classList.remove('visible');
+    }, 180);
   }
 
-  buildProgram();
+  hotzone.addEventListener('mouseenter', showDeck);
+  deck.addEventListener('mouseenter', showDeck);
+  deck.addEventListener('mouseleave', scheduleHide);
+  hotzone.addEventListener('mouseleave', function(){
+    // only schedule hide if the mouse didn't move into the deck itself
+    setTimeout(function(){
+      if (!deck.matches(':hover')) scheduleHide();
+    }, 30);
+  });
 
-  // Rebuild quando trocar modo
-  window._rebuildProgram = buildProgram;
+  kickInput.addEventListener('focus', showDeck);
+  twitchInput.addEventListener('focus', showDeck);
+  kickInput.addEventListener('blur', scheduleHide);
+  twitchInput.addEventListener('blur', scheduleHide);
 
-  // Loop de renderização
-  function render() {
-    rafId = requestAnimationFrame(render);
-    if (srcVideo.readyState < 2) return;
+  function setPinned(state){
+    pinned = state;
+    localStorage.setItem('duocast_pinned', state ? '1' : '0');
+    pinBtn.classList.toggle('active', state);
+    pinBtn.textContent = state ? 'Barra fixa' : 'Fixar barra';
+    if (state) showDeck(); else scheduleHide();
+  }
+  pinBtn.addEventListener('click', function(){ setPinned(!pinned); });
 
-    // Ajusta canvas ao vídeo
-    if (canvas.width !== srcVideo.videoWidth || canvas.height !== srcVideo.videoHeight) {
-      canvas.width  = srcVideo.videoWidth  || 1280;
-      canvas.height = srcVideo.videoHeight || 720;
-      gl.viewport(0, 0, canvas.width, canvas.height);
-    }
-
-    gl.useProgram(program);
-    gl.bindTexture(gl.TEXTURE_2D, texture);
-    gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, gl.RGBA, gl.UNSIGNED_BYTE, srcVideo);
-
-    const tsLoc = gl.getUniformLocation(program, 'u_texelSize');
-    if (tsLoc) gl.uniform2f(tsLoc, 1.0 / canvas.width, 1.0 / canvas.height);
-
-    gl.drawArrays(gl.TRIANGLE_STRIP, 0, 4);
+  function loadKick(name){
+    name = sanitize(name);
+    if (!name) return;
+    kickInput.value = name;
+    kickFrame.src = 'https://player.kick.com/' + encodeURIComponent(name) + '?autoplay=true';
+    kickFrame.classList.remove('hidden');
+    kickPlaceholder.classList.add('hidden');
+    kickLed.classList.add('on-kick');
+    localStorage.setItem('duocast_kick', name);
+    var url = new URL(window.location.href);
+    url.searchParams.set('kick', name);
+    window.history.replaceState({}, '', url);
   }
 
-  render();
-}
-
-// ─────────────────────────────────────────────
-// CONTROLES DE MODO
-// ─────────────────────────────────────────────
-
-function setMode(mode) {
-  currentMode = mode;
-  document.querySelectorAll('.modeBtn').forEach(b => b.classList.toggle('active', b.dataset.mode === mode));
-
-  const badge = document.getElementById('qualityBadge');
-  const text  = document.getElementById('badgeText');
-
-  if (mode === 'off') {
-    badge.classList.add('off');
-    text.textContent = 'Anime4K Off';
-  } else {
-    badge.classList.remove('off');
-    text.textContent = `Anime4K ${mode.charAt(0).toUpperCase()+mode.slice(1)}`;
+  function loadTwitch(name){
+    name = sanitize(name);
+    if (!name) return;
+    twitchInput.value = name;
+    var parent = window.location.hostname || 'localhost';
+    twitchFrame.src = 'https://www.twitch.tv/embed/' + encodeURIComponent(name) + '/chat?parent=' + parent + '&darkpopout';
+    twitchFrame.classList.remove('hidden');
+    twitchPlaceholder.classList.add('hidden');
+    twitchLed.classList.add('on-twitch');
+    localStorage.setItem('duocast_twitch', name);
+    var url = new URL(window.location.href);
+    url.searchParams.set('twitch', name);
+    window.history.replaceState({}, '', url);
   }
 
-  if (window._rebuildProgram) window._rebuildProgram();
-}
+  kickGo.addEventListener('click', function(){ loadKick(kickInput.value); });
+  twitchGo.addEventListener('click', function(){ loadTwitch(twitchInput.value); });
+  kickInput.addEventListener('keydown', function(e){ if (e.key === 'Enter') loadKick(kickInput.value); });
+  twitchInput.addEventListener('keydown', function(e){ if (e.key === 'Enter') loadTwitch(twitchInput.value); });
 
-// ─────────────────────────────────────────────
-// ABRIR STREAM
-// ─────────────────────────────────────────────
+  // restore from URL params first, then localStorage
+  var params = new URLSearchParams(window.location.search);
+  var initKick = params.get('kick') || localStorage.getItem('duocast_kick');
+  var initTwitch = params.get('twitch') || localStorage.getItem('duocast_twitch');
+  if (initKick) { kickInput.value = initKick; loadKick(initKick); }
+  if (initTwitch) { twitchInput.value = initTwitch; loadTwitch(initTwitch); }
 
-async function abrir() {
-  const canal  = document.getElementById('kick').value.trim();
-  const twitch = document.getElementById('twitch').value.trim();
+  if (pinned) setPinned(true);
 
-  // Chat
-  document.getElementById('chat').src =
-    `https://www.twitch.tv/embed/${twitch}/chat?parent=${location.hostname}&darkpopout`;
-
-  // Stream Kick
-  try {
-    const res  = await fetch(`https://kick.com/api/v2/channels/${canal}`);
-    const data = await res.json();
-    const hlsUrl = data?.livestream?.playback_url || data?.playback_url;
-    if (!hlsUrl) { console.error('Canal offline ou HLS URL não encontrado'); return; }
-
-    if (hlsPlayer) { hlsPlayer.destroy(); hlsPlayer = null; }
-
-    if (Hls.isSupported()) {
-      hlsPlayer = new Hls({ enableWorker: true, lowLatencyMode: true });
-      hlsPlayer.loadSource(hlsUrl);
-      hlsPlayer.attachMedia(srcVideo);
-      hlsPlayer.on(Hls.Events.MANIFEST_PARSED, () => srcVideo.play());
-    } else {
-      srcVideo.src = hlsUrl;
-      srcVideo.play();
-    }
-  } catch(e) {
-    console.error('Erro ao carregar stream:', e);
-  }
-}
-
-// ─────────────────────────────────────────────
-// INIT
-// ─────────────────────────────────────────────
-
-initGL();
-abrir();
-
-// Esconder barra
-let timer;
-function esconderBarra() { document.getElementById('top').classList.add('hidden'); }
-function mostrarBarra() {
-  document.getElementById('top').classList.remove('hidden');
-  clearTimeout(timer);
-  timer = setTimeout(esconderBarra, 3000);
-}
-document.addEventListener('mousemove', e => { if (e.clientY < 80) mostrarBarra(); });
-timer = setTimeout(esconderBarra, 3000);
+  // show the deck briefly on load so the user notices it
+  showDeck();
+  setTimeout(function(){ if (!pinned) scheduleHide(); }, 2200);
+})();
 </script>
+
 </body>
 </html>
